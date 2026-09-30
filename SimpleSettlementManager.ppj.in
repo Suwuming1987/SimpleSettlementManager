@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 据点管理终端 —— Papyrus 编译工程**模板**。
+     真正的 SimpleSettlementManager.ppj 由 tools/build.sh 按 tools/local.conf 里的路径生成
+     （生成物不进版本库，所以这里不能写死任何本机路径）。
+
+     注意（实测结论）：
+       * 路径必须用正斜杠，且必须是绝对路径 —— 编译器不解析反斜杠，
+         相对路径也不按 .ppj 所在目录解析（会报 Unable to find flags file）。
+       * 编译器即使编译失败也返回 0，所以构建脚本必须检查输出文件是否存在。
+       * 带命名空间的脚本（SettlementManager:Xxx）只能用 .ppj 方式编译；
+         命令行直接编译 .psc 会因为文件名与命名空间不匹配而失败。
+
+     Imports = 依赖解析路径（原版脚本 + Workshop Framework / PrismaUI 的脚本源码）
+     Folders = 实际要编译的源码目录（命名空间 = 子目录名）
+     开发期 Release/Final = false（保留 Debug.Trace 便于排查），发布改 true。
+
+     vendor/ 下的原版与第三方脚本源码不进版本库（见 README 的"从源码构建"：
+     原版脚本从游戏自带的 Scripts 压缩包取，WSFW / PrismaUI 的源码随各自 mod 分发）。 -->
+<PapyrusProject Output="@ROOT@/dist/Scripts"
+               Flags="@ROOT@/vendor/vanilla/Source/Institute_Papyrus_Flags.flg"
+               Asm="Discard"
+               Optimize="true"
+               Release="false"
+               Final="false">
+  <Imports>
+    <Import>@ROOT@/src/Scripts/Source/User</Import>
+    <Import>@ROOT@/vendor/wsfw/Source/User</Import>
+    <Import>@ROOT@/vendor/vanilla/Source</Import>
+    <Import>@ROOT@/vendor/prismaui/Source</Import>
+  </Imports>
+  <Folders>
+    <Folder>@ROOT@/src/Scripts/Source/User</Folder>
+  </Folders>
+</PapyrusProject>

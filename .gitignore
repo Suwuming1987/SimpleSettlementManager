@@ -1,0 +1,37 @@
+# ---- 构建产物 ----
+dist/
+plugin/build/
+plugin/dist/
+plugin/tools/xmake/
+
+# .ppj 由 tools/build.sh 从 .ppj.in 生成（里面是绝对路径，因机器而异）
+*.ppj
+
+# ---- 本机配置 ----
+tools/local.conf
+
+# ---- 开发期杂物（有 git 之后不再需要这些手工备份）----
+backups/
+logs/
+release/
+
+# ---- 生成物 ----
+tools/_preview.html
+tools/probe/out/
+tools/probe/*.ppj
+
+# ---- 第三方参考源码（不进版本库，见 README「从源码构建」）----
+# 原版脚本 + Workshop Framework / PrismaUI 的源码，从各自发行的包或游戏目录取。
+vendor/
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+
+# ---- 从别人的 BA2 里解出来的脚本（第三方版权，只作本地参考）----
+tools/_ba2_out/
+
+# ---- xmake 的本地缓存 ----
+plugin/.xmake/

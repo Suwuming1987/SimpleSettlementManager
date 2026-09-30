@@ -1,0 +1,25 @@
+# 统一用 LF，避免 Windows/Linux 之间来回改行尾把 diff 弄脏。
+* text=auto eol=lf
+
+# 构建脚本和 Papyrus 源码必须是 LF：
+#   * .sh 在 git-bash / WSL 下跑，CRLF 会让 `bash: $'\r': command not found`；
+#   * .psc 交给 PapyrusCompiler，全仓库统一行尾免得 diff 里混进整文件改动。
+*.sh   text eol=lf
+*.psc  text eol=lf
+*.ppj  text eol=lf
+*.ppj.in text eol=lf
+
+# .bat 反过来必须是 CRLF（cmd.exe 对 LF 的兼容不稳）
+*.bat  text eol=crlf
+
+# 二进制：别做行尾转换，也不想在 diff 里显示内容
+*.esp  binary
+*.esl  binary
+*.pex  binary
+*.dll  binary
+*.flg  binary
+*.zip  binary
+*.png  binary
+*.jpg  binary
+*.dds  binary
+*.ba2  binary

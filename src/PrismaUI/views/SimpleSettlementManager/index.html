@@ -1,0 +1,1913 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>Simple Settlement Manager</title>
+<style>
+  /* 窗口样式：整页透明，只有中间的 #app 是可见窗口 */
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+    background: transparent; color: #46e05a;
+    font-family: "Consolas", "Courier New", monospace; font-size: calc(20px * var(--s) * var(--fs)); user-select: none; }
+
+  :root { --accent: #46e05a; --accent-hi: #7dff8f; --accent-dim: #2f8a3d;
+          --line: #1d5a25; --line-strong: #2f8a3d; --bg: rgba(6, 16, 6, 0.93); --s: 1; --fs: 1;
+          --soft: rgba(70,224,90,0.16); --fill: rgba(70,224,90,0.30); }
+  html[data-theme="amber"] { --accent: #ffb454; --accent-hi: #ffd08a; --accent-dim: #a06a1e;
+          --line: #6b4f16; --line-strong: #a06a1e; --bg: rgba(18, 12, 4, 0.93);
+          --soft: rgba(255,180,84,0.16); --fill: rgba(255,180,84,0.30); }
+  html[data-theme="blue"] { --accent: #4fd2ff; --accent-hi: #a5e8ff; --accent-dim: #23718f;
+          --line: #17455a; --line-strong: #23718f; --bg: rgba(4, 12, 18, 0.93);
+          --soft: rgba(79,210,255,0.16); --fill: rgba(79,210,255,0.30); }
+
+  #app { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: calc(1180px * var(--s)); height: calc(740px * var(--s)); max-width: 94vw; max-height: 90vh;
+    display: flex; box-sizing: border-box;
+    background: var(--bg); color: var(--accent);
+    border: calc(1px * var(--s)) solid var(--line-strong); border-radius: calc(4px * var(--s));
+    box-shadow: 0 0 0 calc(1px * var(--s)) rgba(6,16,6,0.9), 0 0 calc(26px * var(--s)) rgba(70,224,90,0.22); }
+
+  /* 左侧常驻标签栏 */
+  #nav { width: calc(168px * var(--s)); flex: none; display: flex; flex-direction: column;
+    border-right: calc(1px * var(--s)) solid var(--line); padding: calc(14px * var(--s)) 0 calc(10px * var(--s)); box-sizing: border-box; }
+  #nav .brand { font-size: calc(19px * var(--s) * var(--fs)); color: var(--accent-hi); padding: 0 calc(16px * var(--s)) calc(14px * var(--s)); letter-spacing: calc(2px * var(--s)); }
+  #nav button { display: block; width: 100%; text-align: left; padding: calc(12px * var(--s)) calc(18px * var(--s));
+    background: transparent; border: 0; border-left: calc(3px * var(--s)) solid transparent;
+    color: var(--accent-dim); font-family: inherit; font-size: calc(20px * var(--s) * var(--fs)); cursor: pointer; }
+  #nav button:hover { color: var(--accent); background: rgba(70,224,90,0.07); }
+  #nav button.on { color: var(--accent-hi); border-left-color: var(--accent); background: rgba(70,224,90,0.12); }
+  #nav .foot { margin-top: auto; padding: calc(10px * var(--s)) calc(14px * var(--s)) 0; border-top: calc(1px * var(--s)) solid var(--line); }
+  #nav .foot .stat { font-size: calc(15px * var(--s) * var(--fs)); color: var(--accent-dim); margin-bottom: calc(8px * var(--s)); line-height: 1.5; }
+  #nav .foot button { text-align: center; border: calc(1px * var(--s)) solid var(--line-strong); padding: calc(8px * var(--s)) 0; }
+
+  main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  main header { display: flex; align-items: baseline; justify-content: space-between;
+    padding: calc(14px * var(--s)) calc(20px * var(--s)) calc(10px * var(--s)); border-bottom: calc(1px * var(--s)) solid var(--line); }
+  main header h1 { font-size: calc(23px * var(--s) * var(--fs)); margin: 0; color: var(--accent-hi); font-weight: normal; letter-spacing: calc(2px * var(--s)); }
+  main header .sub { font-size: calc(16px * var(--s) * var(--fs)); color: var(--accent-dim); }
+  .content { flex: 1; min-height: 0; padding: calc(14px * var(--s)) calc(20px * var(--s)) calc(16px * var(--s)); display: flex; flex-direction: column; }
+  .page { display: none; flex: 1; min-height: 0; flex-direction: column; }
+  .page.on { display: flex; }
+
+  .cols { display: flex; gap: calc(14px * var(--s)); flex: 1; min-height: 0; }
+  /* 列默认等分宽度；单独要比例的用行内 flex 覆盖（据点页 33%、居民页 1.3:1）*/
+  .col { display: flex; flex-direction: column; min-height: 0; flex: 1 1 0; min-width: 0; }
+  .panel { flex: 1; min-height: 0; overflow-y: auto; border: calc(1px * var(--s)) solid var(--line); background: rgba(0,0,0,0.35); }
+  .panel::-webkit-scrollbar { width: calc(9px * var(--s)); }
+  .panel::-webkit-scrollbar-thumb { background: var(--line-strong); }
+  h2 { font-size: calc(16px * var(--s) * var(--fs)); margin: 0 0 calc(6px * var(--s)); color: var(--accent-dim); font-weight: normal; letter-spacing: calc(1px * var(--s)); }
+  .row { display: flex; align-items: center; gap: calc(10px * var(--s)); padding: calc(8px * var(--s)) calc(11px * var(--s)); cursor: pointer;
+    border-bottom: calc(1px * var(--s)) solid rgba(29,90,37,0.3); }
+  .row:hover { background: rgba(70,224,90,0.08); }
+  .row.sel { background: rgba(70,224,90,0.18); }
+  /* 名字只占内容宽（不够时可省略），剩余空间给右边的说明/岗位名 —— 
+     否则窄列里名字会把「人口 7 无业 3」这种说明挤到省略号 */
+  .row .name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .meta { flex: 1; font-size: calc(16px * var(--s) * var(--fs)); color: var(--accent-dim);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tag { font-size: calc(14px * var(--s) * var(--fs)); padding: calc(1px * var(--s)) calc(6px * var(--s)); border: calc(1px * var(--s)) solid var(--line); border-radius: calc(2px * var(--s)); white-space: nowrap; }
+  .tag.idle { color: #d8a13a; border-color: #6b4f16; }
+  .tag.work { color: #6ee8a0; }
+  .tag.comp { color: #7aa8ff; border-color: #23407a; }
+  .tag.nobed { color: #ff9b9b; border-color: #6b2b2b; }
+  /* 搬运工（跑供应线）：单独一个颜色，和"在岗/无业/队友"区分开 */
+  .tag.caravan { color: #7ee0c8; border-color: #1f5f52; }
+  /* 居民页三栏：左边职业标签栏 / 中间人员列表 / 右边详情与操作（玩家要的布局） */
+  .ppl { display: flex; gap: calc(12px * var(--s)); flex: 1; min-height: 0; }
+  .ptabs { flex: none; width: calc(150px * var(--s)); overflow-y: auto;
+    border: calc(1px * var(--s)) solid var(--line); background: rgba(0,0,0,0.35); }
+  .ptab { display: flex; justify-content: space-between; align-items: center; gap: calc(6px * var(--s));
+    width: 100%; box-sizing: border-box; text-align: left; cursor: pointer;
+    background: transparent; border: 0; border-left: calc(3px * var(--s)) solid transparent;
+    color: var(--accent-dim); font-family: inherit; font-size: calc(17px * var(--s) * var(--fs));
+    padding: calc(9px * var(--s)) calc(10px * var(--s)); }
+  .ptab:hover { background: rgba(70,224,90,0.07); color: var(--accent); }
+  .ptab.on { color: var(--accent-hi); border-left-color: var(--accent); background: rgba(70,224,90,0.12); }
+  .ptab .n { font-size: calc(14px * var(--s) * var(--fs)); color: var(--accent-dim); }
+  /* 职业状态配色（农民/拾荒者/守卫/商人；无业/在岗/队友/运输沿用旧色） */
+  .tag.farmer { color: #c9e06e; } .tag.scav { color: #d8c07a; }
+  .tag.guard { color: #ffcf7a; border-color: #6b4f16; } .tag.vendor { color: #e0a6ff; border-color: #4d2b6b; }
+  /* 总览：供应网络（层级 = 网络标题 → 成员名单 → 每个据点的数值行） */
+  .nethead { padding: calc(7px * var(--s)) calc(12px * var(--s));
+    font-size: calc(18px * var(--s) * var(--fs)); color: var(--accent-hi);
+    background: rgba(70,224,90,0.09); border-bottom: calc(1px * var(--s)) solid rgba(29,90,37,0.5); }
+  .nethead .tot { color: var(--accent-dim); font-size: calc(16px * var(--s) * var(--fs)); }
+  .netmem { display: flex; align-items: baseline; gap: calc(10px * var(--s));
+    /* 比标题行缩进一级，层级（网络 → 据点）一眼能看出来 */
+    padding: calc(5px * var(--s)) calc(12px * var(--s)) calc(5px * var(--s)) calc(30px * var(--s)); cursor: pointer;
+    border-bottom: calc(1px * var(--s)) solid rgba(29,90,37,0.22); }
+  .netmem:hover { background: rgba(70,224,90,0.08); }
+  .netmem .nm { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .netmem .st { flex: 1; font-size: calc(16px * var(--s) * var(--fs)); color: var(--accent-dim); white-space: nowrap; }
+  .kv { font-size: calc(17px * var(--s) * var(--fs)); color: var(--accent-dim); line-height: 1.9; }
+  .kv b { color: var(--accent-hi); font-weight: normal; }
+  .empty { padding: calc(14px * var(--s)); color: var(--accent-dim); font-size: calc(17px * var(--s) * var(--fs)); }
+  .dot { width: calc(11px * var(--s)); height: calc(11px * var(--s)); border-radius: 50%; flex: none; }
+  .dot.ok { background: #46e05a; } .dot.warn { background: #d8a13a; } .dot.bad { background: #ff6b6b; }
+
+  .filters { display: flex; gap: calc(6px * var(--s)); margin-bottom: calc(8px * var(--s)); flex-wrap: wrap; }
+  /* 统一的按钮风格：暗底描边 + 半透明高亮（不再用发亮的实心块，尺寸也统一） */
+  .btn, .filters button {
+    background: transparent; color: var(--accent-dim);
+    border: calc(1px * var(--s)) solid var(--line);
+    font-family: inherit; font-size: calc(16px * var(--s) * var(--fs));
+    padding: calc(3px * var(--s)) calc(14px * var(--s));
+    min-width: calc(76px * var(--s)); text-align: center; cursor: pointer;
+  }
+  .btn:hover, .filters button:hover { color: var(--accent-hi); border-color: var(--accent-dim); }
+  .btn.on, .filters button.on {
+    background: var(--soft); border-color: var(--accent); color: var(--accent-hi);
+  }
+  .btn.primary {
+    background: var(--fill); border-color: var(--accent); color: var(--accent-hi);
+    padding: calc(8px * var(--s)) calc(22px * var(--s));
+    font-size: calc(18px * var(--s) * var(--fs));
+  }
+  .btn.primary:hover { background: var(--soft); }
+  .btn.danger { color: #ff9b9b; border-color: #6b2b2b; }
+  /* 未满足前置条件的按钮：压暗且不响应 */
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn.danger:hover { background: rgba(255,107,107,0.12); border-color: #a04141; }
+  .row button { background: transparent; color: #d8a13a; border: calc(1px * var(--s)) solid #6b4f16;
+    font-family: inherit; font-size: calc(16px * var(--s) * var(--fs));
+    padding: calc(2px * var(--s)) calc(10px * var(--s)); min-width: calc(64px * var(--s));
+    text-align: center; cursor: pointer; }
+  .row button:hover { background: rgba(216,161,58,0.12); }
+
+  /* 网络组里的据点行：左边多缩进一级，层级（网络 → 据点）看得出来 */
+  .scard.in-net { padding-left: calc(30px * var(--s)); }
+  /* 展开中的那一行（就地展开明细，= 原据点页的内容） */
+  .scard.in-net.sel { background: rgba(70,224,90,0.16); }
+  .netdetail { padding: calc(12px * var(--s)) calc(14px * var(--s)) calc(14px * var(--s)) calc(30px * var(--s));
+    border-bottom: calc(1px * var(--s)) solid rgba(29,90,37,0.5); background: rgba(0,0,0,0.18); }
+  .netdetail .row { cursor: default; }
+  /* "暂存数据"的标注条（离开据点后仍显示的上次数据） */
+  .netstale { margin-bottom: calc(8px * var(--s)); padding: calc(5px * var(--s)) calc(9px * var(--s));
+    border-left: calc(3px * var(--s)) solid #d8a13a; background: rgba(216,161,58,0.12);
+    color: #d8a13a; font-size: calc(15px * var(--s) * var(--fs)); }
+  /* 居民详情的 S.P.E.C.I.A.L. 表：属性 / 值 成对两列，带行分隔线 */
+  .sptable { width: 100%; border-collapse: collapse;
+    background: rgba(0,0,0,0.22); border: calc(1px * var(--s)) solid var(--line); }
+  .sptable td { padding: calc(4px * var(--s)) calc(8px * var(--s));
+    border-bottom: calc(1px * var(--s)) solid rgba(29,90,37,0.45); }
+  .sptable tr:last-child td { border-bottom: 0; }
+  .sptable td.spn { color: var(--accent-dim); }
+  .sptable td.spv { color: var(--accent-hi); text-align: right; width: calc(46px * var(--s)); }
+  /* 空闲岗位：横排小标签（同名合并计数） */
+  .jobchips { display: flex; flex-wrap: wrap; gap: calc(8px * var(--s)) calc(10px * var(--s)); align-items: center; }
+  .jchip { border: calc(1px * var(--s)) solid var(--line); border-radius: calc(2px * var(--s));
+    padding: calc(1px * var(--s)) calc(8px * var(--s)); color: var(--accent); }
+  /* 全部工位：有人=绿、空缺=黄（与"缺人/缺食"那套黄红区分开，这里不是问题，是状态） */
+  /* 被开关禁用掉的按钮：变淡 + 手型改成禁止 */
+  .btn[disabled], .filters button[disabled] { opacity: 0.4; cursor: not-allowed; }
+  .jchip.taken { color: #6ee8a0; border-color: #245c39; }
+  .jchip.vacant { color: #ffcf7a; border-color: #6b4f16; background: rgba(216,161,58,0.10); }
+  /* 可点区块（居民概况 / 工位）：鼠标提示 + 悬停高亮 */
+  /* 选择面板（岗位页挑人 / 居民页派活、派运输线）：一排可点的按钮 */
+  .pickbar { display: flex; flex-wrap: wrap; gap: calc(6px * var(--s)); align-items: center;
+    margin-top: calc(8px * var(--s)); padding: calc(8px * var(--s)) calc(10px * var(--s));
+    border-left: calc(3px * var(--s)) solid var(--accent); background: rgba(70,224,90,0.10); }
+  /* 顶替按钮：稍微区分一下（它是"抢别人的活"，不是填空缺） */
+  .btn.swap { border-color: #6b4f16; color: #d8a13a; }
+  .pickhint { width: 100%; font-size: calc(15px * var(--s) * var(--fs)); color: var(--accent-dim); }
+  /* 合并行的第二行：干活的人（完整列出，允许换行；视觉上属于上面那一行） */
+  .kmworkers { padding: 0 calc(11px * var(--s)) calc(6px * var(--s)) calc(34px * var(--s));
+    color: var(--accent-dim); font-size: calc(15px * var(--s) * var(--fs));
+    white-space: normal; overflow: hidden; cursor: pointer;
+    border-bottom: calc(1px * var(--s)) solid rgba(29,90,37,0.3); }
+  .kmworkers:hover { background: rgba(70,224,90,0.08); }
+  .kmworkers.sel { background: rgba(70,224,90,0.16); }
+  .clickable { cursor: pointer; }
+  .clickable:hover { background: rgba(70,224,90,0.08); }
+  .scard { display: flex; align-items: center; gap: calc(12px * var(--s)); padding: calc(10px * var(--s)) calc(13px * var(--s)); cursor: pointer;
+    border-bottom: calc(1px * var(--s)) solid rgba(29,90,37,0.3); }
+  .scard:hover { background: rgba(70,224,90,0.08); }
+  .scard .sname { flex: 0 0 24%; color: var(--accent-hi); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .scard .stats { flex: 1; font-size: calc(17px * var(--s) * var(--fs)); color: var(--accent-dim); }
+  .scard .flags { flex: 0 0 32%; font-size: calc(15px * var(--s) * var(--fs)); text-align: right; }
+  /* 右侧的短缺文字：网络能补上 → 黄；网络也补不上 → 红（与左侧圆点同一套判定） */
+  .scard .flags.warn b { color: #d8a13a; }
+  .scard .flags.bad b { color: #ff6b6b; }
+  .scard .flags b { color: #ff9b9b; font-weight: normal; }
+  .scard .flags i { color: #d8a13a; font-style: normal; }
+
+  /* 改名那一行：输入框 + 两个按钮。输入框沿用按钮的暗底描边风格 */
+  .renamebar { display: flex; gap: calc(8px * var(--s)); align-items: stretch; }
+  .renamebar input {
+    flex: 1; min-width: 0; background: rgba(0,0,0,0.45); color: var(--accent-hi);
+    border: calc(1px * var(--s)) solid var(--line); font-family: inherit;
+    font-size: calc(17px * var(--s) * var(--fs)); padding: calc(3px * var(--s)) calc(9px * var(--s));
+  }
+  .renamebar input:focus { outline: none; border-color: var(--accent); }
+  .renamebar button { min-width: calc(70px * var(--s)); }
+  .renamehint { font-size: calc(14px * var(--s) * var(--fs)); color: var(--accent-dim); margin-top: calc(5px * var(--s)); }
+
+  .pairbar { display: flex; align-items: center; gap: calc(14px * var(--s)); margin-top: calc(12px * var(--s));
+    border-top: calc(1px * var(--s)) solid var(--line); padding-top: calc(12px * var(--s)); }
+  .pairbar .count { font-size: calc(17px * var(--s) * var(--fs)); color: var(--accent-dim); }
+
+  .setting { display: flex; align-items: center; gap: calc(14px * var(--s)); padding: calc(10px * var(--s)) calc(4px * var(--s));
+    border-bottom: calc(1px * var(--s)) solid rgba(29,90,37,0.3); font-size: calc(18px * var(--s) * var(--fs)); }
+  .setting .label { flex: 0 0 calc(200px * var(--s)); color: var(--accent-dim); }
+  .setting .val { flex: 1; }
+  .setting .val button { margin-right: calc(6px * var(--s)); }
+  .about { margin-top: calc(14px * var(--s)); font-size: calc(16px * var(--s) * var(--fs)); color: var(--accent-dim); line-height: 1.8; }
+  .about code { color: var(--accent); }
+
+  #confirm { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.35); }
+  #confirm.on { display: flex; }
+  #confirm .box { width: calc(540px * var(--s)); max-width: 82vw; background: var(--bg); border: calc(1px * var(--s)) solid var(--line-strong);
+    padding: calc(22px * var(--s)) calc(24px * var(--s)); box-shadow: 0 0 calc(24px * var(--s)) rgba(0,0,0,0.6); }
+  #confirm .txt { font-size: calc(19px * var(--s) * var(--fs)); line-height: 1.7; margin-bottom: calc(18px * var(--s)); white-space: pre-wrap; }
+  #confirm .acts { display: flex; gap: calc(10px * var(--s)); justify-content: flex-end; }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="nav">
+    <div class="brand" id="brand"></div>
+    <button data-page="overview" onclick="go('overview')"></button>
+    <button data-page="people"   onclick="go('people')"></button>
+    <button data-page="jobs"     onclick="go('jobs')"></button>
+    <button data-page="settings" onclick="go('settings')"></button>
+    <div class="foot">
+      <div class="stat" id="bridge">桥：检测中…</div>
+      <div class="stat" id="where">—</div>
+      <button id="closeBtn" onclick="closeNow()"></button>
+    </div>
+  </aside>
+
+  <main>
+    <header><h1 id="title"></h1><span class="sub" id="hint"></span></header>
+    <div class="content">
+      <section id="page-overview" class="page on"></section>
+      <section id="page-people"   class="page"></section>
+      <section id="page-jobs"     class="page"></section>
+      <section id="page-settings" class="page"></section>
+    </div>
+  </main>
+</div>
+
+<div id="confirm"><div class="box">
+  <div class="txt" id="confirmTxt"></div>
+  <div class="acts">
+    <button class="btn primary" id="confirmYes"></button>
+    <button class="btn" id="confirmNo" onclick="confirmClose()"></button>
+  </div>
+</div></div>
+
+<script>
+  // ===========================================================================
+  // 与游戏的桥（PrismaUI）
+  //   游戏 → 页面：Papyrus 调 PrismaUI.Push(视图名, "smOnData", 数据)
+  //   页面 → 游戏：window.prisma.emit("<事件名>")  →  Papyrus 的 OnPrismaUIEvent
+  //
+  // 注意：FO4 的 Papyrus 没有任何字符串方法，所以参数不做解析 ——
+  // 下标直接拼进事件名（smPickSettler3 / smPickJob7 / smMigrateTo2 …）。
+  // 行序必须与 Papyrus 侧 GetWorkshopActors / GetFreeJobForms / GetOwnedWorkshops 的顺序一致，
+  // 所以界面严格按收到的顺序编号。
+  // ===========================================================================
+
+  // 界面文字词典（中英）。语言切换只影响本面板；游戏内通知与终端菜单项仍是中文。
+  var STR = {
+    zh: {
+      brand: "据点管理",
+      nav_overview: "据点",
+      nav_settle: "据点",
+      nav_people: "居民",
+      nav_jobs: "岗位",
+      nav_settings: "设置",
+      close: "关闭",
+      title_overview: "据点",
+      hint_overview: "所有据点一览，缺东西的排前面；点一行就地展开明细与批量操作",
+      title_people: "居民",
+      title_jobs: "岗位",
+      title_settings: "设置",
+      hint_people: "点一行看详情；指派、迁居、开关都在右侧详情里",
+      hint_jobs: "以岗位为主：点一个工位就给它挑人；也可以一键填补空岗",
+      hint_settings: "界面偏好（保存在本机页面里）",
+      bridge: "桥：",
+      checking: "检测中…",
+      injected: "已注入，等待回应…",
+      noPrisma: "✗ 没有 window.prisma",
+      noEvent: "✗ 事件未到达游戏",
+      noBridge: "✗ 桥未注入",
+      bridgeOk: "✓ 双向通信正常",
+      waiting: "…（等待游戏回应）",
+      cur: "当前：",
+      nowhere: "不在据点范围内",
+      all: "全部",
+      idle: "无业",
+      work: "在岗",
+      jobFarmer: "农民", jobScav: "拾荒者", jobGuard: "守卫", jobVendor: "商人", jobWorker: "工人",
+      labelJob: "职业状态", tabNobed: "无床",
+      comp: "队友",
+      sortStatus: "排序：状态",
+      sortName: "排序：名字",
+      refresh: "刷新",
+      pair: "立即配对",
+      fill: "一键填补空岗",
+      unassignAllBtn: "解除本据点全部岗位",
+      migrate: "迁往其他据点…",
+      unassign: "解除岗位",
+      bySeverity: "按问题排序",
+      byName: "按名字排序",
+      ok: "确定",
+      cancel: "取消",
+      peopleDetail: "居民详情",
+      jobsLabel: "岗位：",
+      flagsTitle: "原版开关",
+      actionsTitle: "操作",
+      compHint: "队友（不参与自动派活）",
+      noMatch: "没有符合条件的居民",
+      pickHint: "点左边的居民查看详情",
+      freeJobs: "空闲工位（{n}）", noFreeJobs: "没有空闲岗位",
+      selected: "已选：居民 {s} 人 ・ 岗位 {j} 个",
+      needBoth: "请先在左右两栏各选至少一项",
+      paired: "已发起 {n} 组配对",
+      noOwned: "还没有已拥有的据点",
+      missFood: "缺食",
+      missWater: "缺水",
+      missBedSp: "缺床",
+      missBeds: "床位",
+      idleCount: "无业",
+      healthy: "状态良好",
+      pop: "人口",
+      popSp: "人口 ",
+      food: "食物",
+      foodSp: "食物 ",
+      water: "水",
+      waterSp: "水 ",
+      power: "电力",
+      powerSp: "电力 ",
+      def: "防御",
+      defSp: "防御 ",
+      beds: "床位",
+      bedsSp: "床位 ",
+      happy: "幸福",
+      happySp: "幸福 ",
+      hereTag: "（当前所在）",
+      noFreeJobs: "没有空闲岗位",
+      confirmFill: "把「{name}」的空闲岗位（{m} 个）自动派给无业居民（{n} 人）？\n会用尽量少的居民填满：一个人可以兼多个同类工位（上限由游戏/WSFW 决定）。",
+      confirmUnassignAll: "解除「{name}」所有居民的岗位？\n（队友会被跳过）",
+      noOtherSettle: "没有别的据点可以迁入。",
+      pickDest: "把「{name}」迁往哪个据点？",
+      fontSize: "字号",
+      uiScale: "界面缩放",
+      theme: "配色主题",
+      defSort: "默认排序",
+      toasts: "面板内提示",
+      selfCheck: "界面自检",
+      netLabel: "网络 {n}", netTotal: "合计", jobCountSp: "工位 ", shortStaff: "缺人", needStaffSp: "需 {n} 人", specialLabel: "S.P.E.C.I.A.L.",
+      spStr: "力量", spPer: "感知", spEnd: "耐力", spCha: "魅力", spInt: "智力", spAgi: "敏捷", spLck: "幸运",
+      language: "语言", hotkey: "面板热键", keyChange: "更改…", bedSection: "床位", netTitle: "供应网络合计", netMembers: "成员", netPop: "人数", netFood: "食物", netWater: "供水", netIsolated: "未接入供应网的据点（{n}）", netMore: "还有 {n} 个据点", detailNotHere: "明细（居民 / 床位 / 岗位）只对<b>当前所在</b>的据点可用 —— 你现在在「{here}」。<br>要操作这个据点，请先走过去。", detailNoSettle: "不在任何据点范围内，明细不可用。", detailTotals: "汇总数值（人口 / 食物 / 水 / 电 / 防御 / 床位）不受影响。", peopleSummary: "居民（{n}）", noResidents: "没有居民", dismiss: "开除", assignJob: "指派工作…", assignCaravan: "指派运输线…", pickJobHint: "选一个工位：", pickSwapHint: "已有摊主的摊位（点它会顶掉当前摊主）：", pickCaravanHint: "选一个运输线目的地：", pickWorkerHint: "挑一个人（只列无业的、以及干同类活还没满岗的）：", vacant: "空缺", kindPosts: "已有人 {taken} / 空缺 {free}", noOtherSettle: "没有别的据点可派", confirmDismiss: "把「{name}」从本据点开除？\n他会离开、不再属于这个据点（工位 / 床位 / 供应线都会解除）。\n注意：有名有姓的任务 NPC 请谨慎，可能影响相关任务。", flagHint: "点一下切换开关；关掉之后，上面相应的操作会变成不可用", hintNoCommand: "已关闭「能否指挥」——「召唤 / 解除岗位」暂不可用", hintNoMove: "已关闭「能否迁走」——「迁往其他据点」暂不可用", allJobs: "工位（{n}：已有人 {taken} / 空缺 {free}）", noJobs: "没有工位", onlyHereJump: "只有当前所在的据点才有居民 / 工位明细可操作 —— 走过去再看", cachedNote: "暂存数据 —— 你上次在该据点时的居民 / 床位 / 岗位（回到那里会自动刷新）", detailCachedPending: "（这个据点还没有暂存数据，走过去看一次就会有）", detailFar: "这个据点不在你附近 —— 只能看汇总数值。<br>居民 / 床位 / 岗位这类明细要原版把该据点加载出来才有，请站到该据点范围内再看。", bedTotal: "床位总数", bedAssigned: "已分配", bedFree: "空床", bedNone: "无床", bedYes: "有", bedNo: "无", bedMissing: "无床人数", keyPress: "请按下新的按键（Esc 取消）", keyBad: "这个键不支持，换一个试试", hotkeyOff: "未设置",
+      actingOn: "作用于当前据点 {here}", flagC: "能否指挥", flagMove: "能否迁走", flagCaravan: "能否运输",
+      noIdleResidents: "没有无业居民", byStatus: "按状态", byNameShort: "按名字",
+      sex: "性别", male: "男", female: "女", caravan: "运输", summon: "召唤", summonHint: "先「召唤」把他叫到身边，再解除岗位",
+      renameTitle: "改名", renameRandom: "随机", renameApply: "确定改名",
+      renameHint: "输入新名字后点「确定改名」；「随机」按该居民的性别从名字库抽一个。",
+      renameEmpty: "先输入一个名字", renameNoLib: "名字库是空的（没抽到名字）",
+      renameSent: "已提交改名：「{name}」",
+      themeGreen: "哔哔绿",
+      themeAmber: "琥珀",
+      themeBlue: "冷蓝",
+      on: "开",
+      off: "关",
+      about: "版本 0.8.7　依赖 PrismaUI F4 ・ Workshop Framework<br>居民 / 床位 / 岗位明细只对当前所在的据点可用。"
+    },
+    en: {
+      brand: "Simple Settlement Manager",
+      nav_overview: "Settlements",
+      nav_settle: "Settlements",
+      nav_people: "Settlers",
+      nav_jobs: "Jobs",
+      nav_settings: "Settings",
+      close: "Close",
+      title_overview: "Settlements",
+      hint_overview: "All settlements at a glance; click a row to expand its detail and batch actions.",
+      title_people: "Settlers",
+      title_jobs: "Jobs",
+      title_settings: "Settings",
+      hint_people: "Click a resident for details; assign, move and the three flags are on the right.",
+      hint_jobs: "Job-first: click a post to pick someone for it; or fill all open posts at once.",
+      hint_settings: "Interface preferences (stored in this page on this machine).",
+      bridge: "Bridge: ",
+      checking: "checking…",
+      injected: "injected, waiting for reply…",
+      noPrisma: "✗ window.prisma missing",
+      noEvent: "✗ events not reaching the game",
+      noBridge: "✗ bridge not injected",
+      bridgeOk: "✓ two-way link OK",
+      waiting: "… (waiting for the game)",
+      cur: "Here: ",
+      nowhere: "not inside a settlement",
+      all: "All",
+      idle: "Idle",
+      work: "Working",
+      jobFarmer: "Farmer", jobScav: "Scavenger", jobGuard: "Guard", jobVendor: "Vendor", jobWorker: "Worker",
+      labelJob: "Job", tabNobed: "No bed",
+      comp: "Companion",
+      sortStatus: "Sort: status",
+      sortName: "Sort: name",
+      refresh: "Refresh",
+      pair: "Pair now",
+      fill: "Fill all empty jobs",
+      unassignAllBtn: "Clear all jobs here",
+      migrate: "Move to another settlement…",
+      unassign: "Unassign",
+      bySeverity: "By problems",
+      byName: "By name",
+      ok: "OK",
+      cancel: "Cancel",
+      peopleDetail: "Resident details",
+      jobsLabel: "Job: ",
+      flagsTitle: "Vanilla flags",
+      actionsTitle: "Actions",
+      compHint: "Companion (skipped by auto-assign)",
+      noMatch: "No residents match",
+      pickHint: "Click a resident on the left",
+      freeJobs: "Free posts ({n})", noFreeJobs: "No free jobs",
+      selected: "Selected: {s} settlers ・ {j} jobs",
+      needBoth: "Pick at least one on each side first",
+      paired: "Started {n} pairing(s)",
+      noOwned: "No settlements owned yet",
+      missFood: "Food -",
+      missWater: "Water -",
+      missBedSp: "Beds -",
+      missBeds: "Beds",
+      idleCount: "idle",
+      healthy: "All good",
+      pop: "Pop",
+      popSp: "Pop ",
+      food: "Food",
+      foodSp: "Food ",
+      water: "Water",
+      waterSp: "Water ",
+      power: "Power",
+      powerSp: "Power ",
+      def: "Def",
+      defSp: "Def ",
+      beds: "Beds",
+      bedsSp: "Beds ",
+      happy: "Happy",
+      happySp: "Happy ",
+      hereTag: " (you are here)",
+      noFreeJobs: "No free jobs",
+      confirmFill: "Fill the {m} empty jobs in \"{name}\" using your {n} unemployed settlers?\nUses as few settlers as possible — one settler can hold several jobs of the same type.",
+      confirmUnassignAll: "Clear the jobs of every resident in \"{name}\"?\n(Companions are skipped)",
+      noOtherSettle: "There is no other settlement to move to.",
+      pickDest: "Move \"{name}\" to which settlement?",
+      fontSize: "Font size",
+      uiScale: "UI scale",
+      theme: "Theme",
+      defSort: "Default sorting",
+      toasts: "In-panel hints",
+      selfCheck: "Self check",
+      netLabel: "Network {n}", netTotal: "Total", jobCountSp: "Posts ", shortStaff: "Short ", needStaffSp: "needs {n}", specialLabel: "S.P.E.C.I.A.L.",
+      spStr: "Strength", spPer: "Perception", spEnd: "Endurance", spCha: "Charisma", spInt: "Intelligence", spAgi: "Agility", spLck: "Luck",
+      language: "Language", hotkey: "Hotkey", keyChange: "Change…", bedSection: "Beds", netTitle: "Supply network totals", netMembers: "Members", netPop: "Pop", netFood: "Food", netWater: "Water", netIsolated: "Not on any supply line ({n})", netMore: "+{n} more", detailNotHere: "Detail (settlers / beds / jobs) is only available for the settlement <b>you are currently in</b> — you are at \u201c{here}\u201d.<br>Walk over there to manage it.", detailNoSettle: "Not inside any settlement — detail unavailable.", detailTotals: "Totals (population / food / water / power / defense / beds) are unaffected.", peopleSummary: "Residents ({n})", noResidents: "No residents", dismiss: "Dismiss", assignJob: "Assign job…", assignCaravan: "Assign supply line…", pickJobHint: "Pick a post:", pickSwapHint: "Stalls already run by someone (clicking one displaces its vendor):", pickCaravanHint: "Pick a destination:", pickWorkerHint: "Pick someone (idle, or already in this line of work with room left):", vacant: "open", kindPosts: "staffed {taken} / open {free}", noOtherSettle: "No other settlement", confirmDismiss: "Dismiss \"{name}\" from this settlement?\nThey will leave and no longer belong here (job / bed / supply line are all cleared).\nCareful with named quest NPCs — it may affect their quests.", flagHint: "Click a switch to toggle it; turning one off disables the matching action above", hintNoCommand: "\"Commandable\" is off — Summon / Unassign are unavailable", hintNoMove: "\"Allow move\" is off — Move to another settlement is unavailable", allJobs: "Posts ({n}: staffed {taken} / open {free})", noJobs: "No posts", onlyHereJump: "Only the settlement you are currently in has resident / job detail you can act on", cachedNote: "Cached data — residents / beds / jobs from your last visit (refreshed when you go back)", detailCachedPending: "(No cached data for this settlement yet — visit it once and it will be kept)", detailFar: "This settlement is not nearby — only totals are available.<br>Settler / bed / job detail needs the settlement loaded by the game; stand inside its area.", bedTotal: "Total beds", bedAssigned: "Assigned", bedFree: "Free", bedNone: "No bed", bedYes: "yes", bedNo: "no", bedMissing: "Settlers without a bed", keyPress: "Press a key (Esc cancels)", keyBad: "That key is not supported — try another", hotkeyOff: "Not set",
+      actingOn: "acts on {here} (where you are)", flagC: "Commandable", flagMove: "Allow move", flagCaravan: "Allow caravan",
+      noIdleResidents: "No idle settlers", byStatus: "By status", byNameShort: "By name",
+      sex: "Sex", male: "Male", female: "Female", caravan: "Provisioner", summon: "Summon", summonHint: "Summon this provisioner to you before unassigning",
+      renameTitle: "Rename", renameRandom: "Random", renameApply: "Apply",
+      renameHint: "Type a name and click Apply; Random draws from the name list matching this settler's sex.",
+      renameEmpty: "Type a name first", renameNoLib: "The name list is empty",
+      renameSent: "Rename sent: \"{name}\"",
+      themeGreen: "Pip green",
+      themeAmber: "Amber",
+      themeBlue: "Cool blue",
+      on: "On",
+      off: "Off",
+      about: "Version 0.8.7　requires PrismaUI F4 ・ Workshop Framework<br>Resident / bed / job detail only works for the settlement you are currently in."
+    }
+  };
+  function t(key, params) {
+    var lang = (state && state.cfg && state.cfg.lang) || "zh";
+    var dict = (lang === "en") ? STR.en : STR.zh;
+    var v = (dict[key] != null) ? dict[key] : (STR.zh[key] != null ? STR.zh[key] : key);
+    if (params) { for (var k in params) { v = v.split("{" + k + "}").join(params[k]); } }
+    return v;
+  }
+
+  // 渲染后把界面上残留的中文文本换成英文。
+  // 为什么需要它：很多标签是多年累积在"拼好的 HTML 字符串"里的，逐条改写又脆又容易漏；
+  // 这个函数从词典反推"中文 → 英文"映射，遍历文本节点替换，自动覆盖所有遗漏。
+  var Z2E = null;
+  function buildZ2E() {
+    Z2E = {};
+    for (var k in STR.zh) {
+      if (STR.en[k] != null && STR.zh[k] && STR.zh[k] !== STR.en[k]) Z2E[STR.zh[k]] = STR.en[k];
+    }
+  }
+  function localizeDom(root) {
+    if (state.cfg.lang !== "en" || !root) return;
+    if (!Z2E) buildZ2E();
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    var nodes = [], n;
+    while ((n = walker.nextNode())) nodes.push(n);
+    for (var i = 0; i < nodes.length; i++) {
+      var txt = nodes[i].nodeValue, changed = false;
+      for (var zh in Z2E) {
+        if (txt.indexOf(zh) >= 0) { txt = txt.split(zh).join(Z2E[zh]); changed = true; }
+      }
+      if (changed) nodes[i].nodeValue = txt;
+    }
+  }
+
+  // 按键捕获用：KeyboardEvent.code → **虚拟键码（VK）**。
+  // 为什么是 VK 而不是扫描码：F4SE 的 RegisterForKey / OnKeyDown 收的就是 VK
+  //   （与 CustomControlMap.txt、Input.GetMappedKey 同一套空间；
+  //     例：0x57='W' Forward、0x44='D' StrafeRight、0x53='S' Back）。
+  // 曾经按 DX 扫描码做表（F10 = 0x44 = 68），结果 68 在 VK 空间里是 'D' ——
+  // 玩家在据点里走动（横移）就会开面板，而 F10 根本没注册上（踩过，别再改回去）。
+  var CODE2VK = {
+    Escape: 0x1B, Tab: 0x09, Enter: 0x0D, Backspace: 0x08, Space: 0x20, CapsLock: 0x14,
+    Minus: 0xBD, Equal: 0xBB, BracketLeft: 0xDB, BracketRight: 0xDD,
+    Semicolon: 0xBA, Quote: 0xDE, Backquote: 0xC0, Backslash: 0xDC,
+    Comma: 0xBC, Period: 0xBE, Slash: 0xBF,
+    Digit1: 0x31, Digit2: 0x32, Digit3: 0x33, Digit4: 0x34, Digit5: 0x35,
+    Digit6: 0x36, Digit7: 0x37, Digit8: 0x38, Digit9: 0x39, Digit0: 0x30,
+    KeyA: 0x41, KeyB: 0x42, KeyC: 0x43, KeyD: 0x44, KeyE: 0x45, KeyF: 0x46,
+    KeyG: 0x47, KeyH: 0x48, KeyI: 0x49, KeyJ: 0x4A, KeyK: 0x4B, KeyL: 0x4C,
+    KeyM: 0x4D, KeyN: 0x4E, KeyO: 0x4F, KeyP: 0x50, KeyQ: 0x51, KeyR: 0x52,
+    KeyS: 0x53, KeyT: 0x54, KeyU: 0x55, KeyV: 0x56, KeyW: 0x57, KeyX: 0x58,
+    KeyY: 0x59, KeyZ: 0x5A,
+    F1: 0x70, F2: 0x71, F3: 0x72, F4: 0x73, F5: 0x74, F6: 0x75, F7: 0x76,
+    F8: 0x77, F9: 0x78, F10: 0x79, F11: 0x7A, F12: 0x7B,
+    Numpad0: 0x60, Numpad1: 0x61, Numpad2: 0x62, Numpad3: 0x63, Numpad4: 0x64,
+    Numpad5: 0x65, Numpad6: 0x66, Numpad7: 0x67, Numpad8: 0x68, Numpad9: 0x69,
+    NumpadMultiply: 0x6A, NumpadAdd: 0x6B, NumpadSubtract: 0x6D, NumpadDecimal: 0x6E, NumpadDivide: 0x6F,
+    ArrowLeft: 0x25, ArrowUp: 0x26, ArrowRight: 0x27, ArrowDown: 0x28,
+    Home: 0x24, End: 0x23, PageUp: 0x21, PageDown: 0x22, Insert: 0x2D, Delete: 0x2E,
+    ShiftLeft: 0xA0, ShiftRight: 0xA1, ControlLeft: 0xA2, ControlRight: 0xA3,
+    AltLeft: 0xA4, AltRight: 0xA5, PrintScreen: 0x2C, ScrollLock: 0x91, Pause: 0x13, NumLock: 0x90
+  };
+  // 键名兜底表（e.key → VK）。Ultralight 不保证给 KeyboardEvent.code，
+  // 实测只认 e.code 的话每个键都会落到"这个键不支持"（玩家反馈）。
+  // 顺序：e.keyCode（浏览器给的就是 VK，直接用）→ e.code → e.key。
+  var KEY2VK = (function () {
+    var m = {}, code, vk;
+    for (code in CODE2VK) {
+      vk = CODE2VK[code];
+      if (code.indexOf("Key") === 0) { m[code.slice(3)] = vk; m[code.slice(3).toLowerCase()] = vk; }
+      else if (code.indexOf("Digit") === 0) { m[code.slice(5)] = vk; }
+      else if (code === "Space") { m[" "] = vk; }
+      else if (code === "ArrowUp") { m["Up"] = vk; }
+      else if (code === "ArrowDown") { m["Down"] = vk; }
+      else if (code === "ArrowLeft") { m["Left"] = vk; }
+      else if (code === "ArrowRight") { m["Right"] = vk; }
+      else { m[code] = vk; }                      // Escape / Tab / Enter / Backspace / Home / F1 …
+    }
+    m["Esc"] = 0x1B; m["Del"] = 0x2E; m["Return"] = 0x0D;
+    m["-"] = 0xBD; m["="] = 0xBB; m["["] = 0xDB; m["]"] = 0xDD; m[";"] = 0xBA;
+    m["'"] = 0xDE; m["`"] = 0xC0; m[","] = 0xBC; m["."] = 0xBE; m["/"] = 0xBF;
+    m["Shift"] = 0xA0; m["Control"] = 0xA2; m["Alt"] = 0xA4;
+    return m;
+  })();
+  // 一次按键 → 虚拟键码（0 = 认不出来）
+  function keyToCode(e) {
+    var vk = e.keyCode || e.which;                 // 浏览器给的 keyCode 就是 VK
+    if (vk) return vk;
+    var c = CODE2VK[e.code];
+    if (c == null && e.key != null) c = KEY2VK[e.key];
+    return c || 0;
+  }
+  var VK2NAME = {};                     // 反查表（把上面的表倒过来，供显示用）
+  function scName(vk) {
+    if (!vk) return "";
+    if (!VK2NAME.ready) {
+      for (var code in CODE2VK) {
+        var v = CODE2VK[code];
+        if (VK2NAME[v] == null) VK2NAME[v] = code;   // 同名冲突时保留第一个
+      }
+      VK2NAME.ready = true;
+    }
+    var n = VK2NAME[vk];
+    if (!n) return "VK 0x" + vk.toString(16).toUpperCase();
+    if (n.indexOf("Key") === 0) return n.slice(3);
+    if (n.indexOf("Digit") === 0) return n.slice(5);
+    if (n.indexOf("Numpad") === 0) return "Num" + n.slice(6);
+    if (n.indexOf("Shift") === 0) return "Shift";
+    if (n.indexOf("Control") === 0) return "Ctrl";
+    if (n.indexOf("Alt") === 0) return "Alt";
+    return n;
+  }
+  // ==== NAMES BEGIN（由 tools/make_namelists.py 生成，别手改）====
+  // 随机名字按**性别**取（男名/女名两份，罕见名已合并进来，不再单独分池）。
+  // 界面语言是中文就用中文名（取自 WYN 的简体中文翻译），否则用英文原名。
+  var NAMES = {
+    en: {  // 来源：What's Your Name（罕见名已并入）
+      male: ["Aaron","Abram","Anderson","Denis","Dennis","Dick","Dom","Dominic",
+      "Don","Donald","Donnie","Andrew","Doug","Douglas","Dylan","Dallas",
+      "Damian","Davy","Dorian","Drake","Dustin","Ed","Andy","Eddy",
+      "Edward","Elias","Elijah","Elliot","Emil","Eric","Erik","Ernest",
+      "Ernie","Anthony","Ethan","Eugene","Evan","Everett","Finn","Flynn",
+      "Gabriel","Garrett","Archer","Gary","Gavin","Gene","Geoffrey","George",
+      "Gil","Gordon","Grayson","Hamilton","Hans","Henry","Herbert","Howard",
+      "Hudson","Hugh","Hugo","Humphrey","Ian","Ilya","Isaac","Isaiah",
+      "Arnie","Jack","Jackson","Jacob","Jake","James","Jason","Jayce",
+      "Jeff","Jeffery","Jenkins","Arnold","Jens","Jeremiah","Jeremy","Jim",
+      "Jimmy","Joe","Joel","Joffrey","John","Johnny","Jon","Jonathan",
+      "Joseph","Josh","Joshua","Julian","Justin","Keith","Kelvin","Ken",
+      "Adam","Asher","Kenshin","Kevin","King","Lance","Landon","Lane",
+      "Leo","Leon","Austin","Les","Levi","Lewis","Liam","Lincoln",
+      "Malcolm","Marc","Marco","Marcus","Mark","Aziz","Marko","Markus",
+      "Marlowe","Martin","Marty","Mason","Mat","Mateo","Mathias","Matt",
+      "Barry","Matthew","Matty","Max","Micah","Michael","Miguel","Mike",
+      "Mitchell","Miles","Bart","Morris","Morty","Nate","Nathan","Nathaniel",
+      "Ned","Nelson","Neville","Nguyen","Nicholas","Bartholomew","Nick","Nico",
+      "Noel","Nolan","Norm","Norman","Oliver","Oscar","Oswald","Ben",
+      "Owen","Patrick","Paul","Perry","Pete","Peter","Phil","Philip",
+      "Raf","Benjamin","Rafael","Ramon","Ramsey","Randal","Randall","Randolph",
+      "Randy","Ray","Raymond","Red","Bennett","Reed","Reese","Rex",
+      "Ricardo","Richard","Rick","Ricky","Ripley","Rob","Robert","Bentley",
+      "Rocky","Roger","Roland","Ronald","Ronny","Ross","Roy","Russell",
+      "Ryan","Adrian","Bernie","Samuel","Sawyer","Scott","Sean","Sebastian",
+      "Shane","Sherlock","Simon","Smith","Solomon","Berry","Spike","Stanley",
+      "Stephen","Sterling","Steve","Steven","Stewart","Stuart","Sullivan","Ted",
+      "Bert","Teddy","Tex","Thom","Thomas","Tim","Timmy","Timothy",
+      "Todd","Tom","Tommy","Tony","Tristan","Troy","Tyler","Victor",
+      "Vin","Vincent","Vinny","Virgil","Vlad","Bill","Vladimir","Walker",
+      "Walter","Walton","Ward","Washington","Wayne","Wes","Will","William",
+      "Billie","Wilson","Wright","Wyatt","Xavier","Zach","Zachary","Zed",
+      "Billy","Bishop","Blaise","Blake","Aiden","Bob","Boris","Brad",
+      "Bradley","Brandon","Brayden","Brendan","Brian","Carlos","Carlo","Al",
+      "Carl","Chad","Che","Chuck","Cliff","Clint","Cody","Caden",
+      "Cal","Alan","Caleb","Campbell","Carter","Carver","Charles","Chase",
+      "Chris","Christian","Christopher","Alexander","Clark","Clemens","Cole","Colin",
+      "Colton","Conall","Connor","Cooper","Corey","Cormac","Allen","Corwin",
+      "Cory","Craig","Curt","Dag","Damien","Dan","Dane","Daniel",
+      "Danny","Darrel","Darren","Darryl","Daryl","Dave","David","Davis",
+      "Dawson","Addison","Val","Vic","Vivian","Willy","Young","Bobbi",
+      "Bobbie","Bobby","Carol","Carson","Charley","Charlie","Alex","Cheng",
+      "Dale","Eddie","Eli","Francis","Gerry","Gray","Grey","Alexis",
+      "Harley","Harper","Harold","Harris","Harrison","Harry","Harvey","Jackie",
+      "Jamie","Ali","Jayden","Jessie","Jo","Joan","Jocelyn","Jody",
+      "Joey","Juan","Kennedy","Kim","Lee","Leslie","Ash","Li",
+      "Lian","Logan","Mackenzie","Morgan","Aubrey","Murphy","Nicola","Noah",
+      "Parker","Pat","Quinn","Avery","Reagan","Reyes","Riley","Robbie",
+      "Robin","Ron","Sal","Sam","Sammie","Sammy","Sydney","Taylor",
+      "Declan","Denton","Ezra","Felipe","Glen","Glyn","Grant","Ares",
+      "Griffin","Guy","Hal","Hall","Ham","Henning","Aries","Apollo",
+      "Khan","Kieran","Morpheus","Palmer","Perez","Salvatore","Yorick","Cenk",
+      "Camden","Corvo","Cornelius","Amir","Fran","Jess","Kara","Kelley",
+      "Kelly","Akira","Bo","Chun","Carey","Dell","Hyun","Ally",
+      "Kamala","Lois","Malak","Malina","Mika","Montana","Nour","Ollie",
+      "Peyton","Raven","Sage","Bailey","Sidney","Skyler","Stef","Steph"],
+      female: ["Aliya","Abby","Alicia","Fiona","Frannie","Gabriella","Gabrielle","Gail",
+      "Gertie","Gertrude","Gianna","Gina","Alison","Grace","Hailey","Hannah",
+      "Harmony","Hazel","Helen","Holly","Hope","Ilene","Irena","Alyssa",
+      "Irene","Isabella","Isabelle","Jade","Jane","Janet","Jasmine","Jen",
+      "Jenette","Jenna","Amanda","Jennifer","Jesse","Jessica","Joanna","Joanne",
+      "Josie","Julia","Juliana","Kaitlyn","Amaria","Karen","Karla","Kate",
+      "Katharine","Katherine","Kayla","Kaylee","Keira","Laila","Amber","Lara",
+      "Laura","Laurie","Layla","Lea","Leia","Lila","Liliana","Lilith",
+      "Amelia","Lillian","Lily","Linda","Lisa","Liz","Madeleine","Madison",
+      "Mandy","Ana","Marcy","Marge","Margie","Maria","Mariam","Marie",
+      "Martha","Mary","Maya","Angel","Meagan","Megan","Mia","Michelle",
+      "Mila","Moira","Molly","Nada","Nadia","Nancy","Angela","Naomi",
+      "Natalia","Natalie","Natasha","Norma","Nora","Nova","Olivia","Paisley",
+      "Abigail","Ann","Pam","Pamela","Patty","Peg","Peggy","Penelope",
+      "Penny","Rachel","Ramona","Rebecca","Anna","Rhianna","Rhiannon","Rhonda",
+      "Rosa","Rosalie","Rose","Rosetta","Rosie","Roxie","Ruby","Annabelle",
+      "Sabrina","Sadie","Sally","Salma","Samantha","Sandra","Sara","Sarah",
+      "Scarlett","Selena","Anne","Sheila","Sonja","Sophia","Sophie","Stella",
+      "Stephanie","Tanya","Tara","Annie","Talia","Tiana","Tina","Tracey",
+      "Tracy","Trinity","Trish","Trisha","Valentina","Aria","Valerie","Vanessa",
+      "Veronica","Veronique","Victoria","Violet","Vivi","Wendy","Willow","Arianna",
+      "Winnie","Zoe","Artemis","Arya","Ashley","Audrey","Aurora","Autumn",
+      "Ava","Barb","Barbara","Beatrice","Beatrix","Becky","Bella","Adeline",
+      "Beth","Bethany","Betsy","Betty","Brenna","Brianna","Caitlin","Camilla",
+      "Candace","Candy","Aideen","Cara","Carla","Carly","Caroline","Carrie",
+      "Cheryl","Christa","Chrystal","Cindy","Colleen","Alaina","Crystal","Catherine",
+      "Charlotte","Cherise","Cherry","Chloe","Christiane","Claire","Alana","Clara",
+      "Corrie","Corrine","Deb","Debb","Debbie","Deborah","Debra","Diana",
+      "Diane","Dianne","Danielle","Daphne","Dora","Elaine","Eleanor","Elena",
+      "Eliana","Elisabeth","Alice","Ella","Ellie","Emily","Emma","Jewel",
+      "Lauren","Sandy","Shannon","Shelly","Alexandra","Kaelyn","Kimberly","Leah",
+      "Maddy","Makayla","Marjorie","Orin","Tegan","Vega","Winifred","Adalyn",
+      "Elektra","Erin","Serena","Shana"],
+    },
+    zh: {  // 来源：What's Your Name 简体中文（罕见名已并入）
+      male: ["阿朗","亚伯兰","安德森","丹尼斯","迪克","多姆","多米尼克","唐纳德",
+      "唐尼","安德鲁","道格","道格拉斯","迪伦","达拉斯","达米安","戴维",
+      "多里安","德雷克","达斯汀","埃德","安迪","埃迪","爱德华","埃利亚斯",
+      "伊利亚","埃利奥特","埃米尔","埃里克","欧内斯特","厄尼","安东尼","伊桑",
+      "尤金","伊凡","埃弗里特","芬恩","弗林","加布里埃尔","加勒特","阿切尔",
+      "盖瑞","加文","基因","杰弗里","乔治","吉尔","戈登","格雷森",
+      "汉密尔顿","汉斯","亨利","赫伯特","霍华","哈德逊","休","雨果",
+      "汉弗莱","伊恩","艾萨克","以赛亚","亚尼","杰克","杰克逊","雅各布",
+      "詹姆斯","杰森","杰斯","杰夫","詹金斯","阿诺德","延斯","耶利米",
+      "杰里米","吉姆","吉米","乔","乔尔","乔弗里","约翰","强尼",
+      "乔恩","乔纳森","约瑟夫","乔希","约书亚","朱利安","贾斯汀","基斯",
+      "开尔文","肯","亚当","亚设","剑心","凯文","金","兰斯",
+      "兰登","莱恩","里奥","里昂","奥斯汀","莱斯","列维","刘易斯",
+      "黎安","林肯","马尔康","马克","马可","马库斯","马科","阿齐兹",
+      "马尔科","马洛","马丁","马蒂","梅森","马特","马特奥","马蒂亚斯",
+      "巴里","马修","麦斯","米迦","麦可","米格尔","迈克","米切尔",
+      "迈尔斯","巴特","莫里斯","莫蒂","内特","内森","纳撒尼尔","尼德",
+      "尼尔森","内维尔","阮","尼古拉斯","巴塞洛缪","尼克","妮寇","诺埃尔",
+      "诺兰","诺姆","诺曼","奥利弗","奥斯卡","奥斯瓦德","班","欧文",
+      "派崔克","保罗","派瑞","皮特","彼得","菲尔","菲利普","拉夫",
+      "班杰明","拉斐尔","拉蒙","拉姆齐","兰德尔","兰道夫","蓝迪","雷",
+      "雷蒙德","莱德","本内特","里德","瑞茜","雷克斯","理查多","理查德",
+      "瑞克","瑞奇","瑞普利","罗布","罗伯特","宾利","洛基","罗杰",
+      "罗兰","罗纳德","罗尼","罗斯","罗伊","罗素","瑞安","阿德里安",
+      "伯尼","塞缪尔","索耶","斯科特","西恩","塞巴斯蒂安","肖恩","夏洛克",
+      "西蒙","史密斯","索罗门","贝里","斯派克","斯坦利","斯蒂芬","施特林",
+      "史蒂夫","史蒂文","斯图瓦特","斯图尔特","沙利文","泰德","伯特","泰迪",
+      "德克斯","汤姆","托马斯","提姆","汤米维塞迪","提摩太","托德","汤米",
+      "东尼","特里斯坦","特洛伊","泰勒","维克托","文","文森特","文尼",
+      "弗吉尔","弗拉德","比尔","弗拉基米尔","沃克","华特","沃尔顿","瓦德",
+      "华盛顿","韦恩","韦斯","威尔","威廉","比莉","威尔逊","赖特",
+      "怀亚特","泽维尔","撒迦","札卡里","泽德","比利","比肖普","布莱兹",
+      "布莱克","艾登","鲍伯","鲍里斯","布莱德","布拉德利","布兰登","布雷登",
+      "布赖恩","卡洛斯","卡洛","艾尔","卡尔","乍得","切","查克",
+      "克里夫","克林特","科迪","凯登","艾伦","迦勒","坎贝尔","卡特",
+      "卡弗","查尔斯","蔡斯","克里斯","克里斯琴","克里斯托弗","亚历山大","克拉克",
+      "克莱门斯","柯尔","科林","科尔顿","康纳尔","康纳","库珀","科里",
+      "科马克","科温","克雷格","柯特","戴格","丹","丹尼","丹尼尔",
+      "达雷尔","达伦","达里尔","戴夫","大卫","戴维斯","道森","爱迪生",
+      "瓦尔","维克","维维安","威利","扬","芭比","鲍比","波比",
+      "卡萝尔","卡森","查理","亚历克斯","程","戴尔","艾迪","伊莱",
+      "弗朗西斯","杰瑞","格拉伊","格雷","亚历克西斯","哈雷","哈珀","哈罗德",
+      "哈里斯","哈里森","哈利","哈维","杰基","杰米","阿里","杰登",
+      "杰西","琼","乔斯琳","乔迪","乔伊","胡安","肯尼迪","李",
+      "莱斯利","艾什","莲","罗根","麦肯琪","摩根","奥布里","墨菲",
+      "妮古拉","诺亚","帕克","帕特","奎因","艾佛力","里根","雷耶斯",
+      "莱利","罗比","罗宾","罗恩","莎尔","山姆","山米","萨米",
+      "希妮","德克兰","丹顿","伊斯拉","菲利佩","格伦","格林","格兰特",
+      "阿瑞斯","格里芬","盖伊","哈尔","霍尔","汉姆","亨宁","阿蕊丝",
+      "阿波罗","汗","基兰","墨菲斯","帕尔默","佩雷斯","萨尔瓦托雷","约里克",
+      "森克","卡姆登","科尔沃","科尼利厄斯","阿米尔","弗兰","卡拉","凯利",
+      "凯莉","阿基拉","博","春","凯里","玄","艾丽","卡玛拉",
+      "露易丝","玛拉克","玛丽娜","米卡","蒙大拿","努尔","奥立","佩顿",
+      "雷文","塞奇","贝利","西德尼","斯凯勒","斯特夫"],
+      female: ["阿丽亚","阿比","艾丽西娅","菲奥娜","弗兰妮","加布里埃拉","盖尔","格蒂",
+      "格特鲁德","吉安娜","吉娜","艾莉森","格蕾丝","海莉","汉娜","哈莫尼",
+      "海柔尔","海伦","霍莉","霍普","伊琳","伊蕾娜","艾丽莎","艾琳",
+      "伊莎贝拉","伊莎贝尔","杰德","简","珍妮特","茉莉","珍","珍娜",
+      "阿曼达","珍妮佛","杰希","杰西卡","乔安娜","乔安妮","乔西","茱莉亚",
+      "朱莉安娜","凯特琳","阿玛利亚","凯伦","凯蒂","凯瑟琳","凯拉","莱拉",
+      "安布尔","拉拉","劳拉","劳里","蕾拉","莉娅","莱娅","莉拉",
+      "莉莉安娜","莉莉丝","阿米莉亚","莉莲","莉莉","琳达","丽莎","丽兹",
+      "玛德琳","麦蒂森","曼蒂","艾娜","玛西","玛姬","玛吉","玛莉亚",
+      "玛丽亚姆","玛丽","玛莎","玛雅","安杰尔","梅根","米娅","米歇尔",
+      "米拉","莫伊拉","娜达","娜迪亚","南希","安吉拉","娜奥米","娜塔莉亚",
+      "娜塔莉","娜塔莎","诺玛","诺拉","诺瓦","奥利维娅","佩斯利","阿比盖尔",
+      "安","帕姆","帕梅拉","帕蒂","皮格","佩姬","佩内洛普","佩妮",
+      "瑞秋","拉蒙娜","丽贝卡","安娜","蕾哈娜","瑞安农","朗达","罗莎",
+      "罗莎莉","玫瑰","罗塞塔","萝西","罗茜","露比","安娜贝尔","萨布丽娜",
+      "塞迪","莎莉","萨尔玛","萨曼莎","桑德拉","莎拉","史嘉莉","塞莱娜",
+      "安妮","席拉","索尼娅","索菲娅","索菲","斯特拉","斯蒂芬妮","坦雅",
+      "塔拉","塔莉亚","蒂安娜","蒂娜","特蕾西","特雷西","崔妮蒂","翠西",
+      "崔莎","瓦伦蒂娜","艾莉亚","瓦莱丽","凡妮莎","维罗妮卡","维罗妮克","维多利亚",
+      "维奥莱特","薇薇","温迪","维洛","阿里安娜","维尼","佐伊","阿耳忒弥斯",
+      "阿什莉","奥黛丽","欧若拉","奥特姆","艾娃","芭芭拉","碧翠丝","贝齐",
+      "贝拉","阿德琳","贝丝","伯大尼","贝琪","贝蒂","布伦娜","布里安娜",
+      "卡米拉","坎迪斯","糖果","艾迪恩","卡莉","卡罗琳","谢里尔","克丽丝塔",
+      "克里斯托尔","辛迪","科琳","艾莱娜","水晶","卡瑟琳","夏洛特","谢丽丝",
+      "切瑞","克洛伊","克里斯蒂安娜","克莱尔","亚兰娜","克拉拉","黛柏","黛布",
+      "黛比","黛博拉","黛布拉","戴安娜","黛安","丹妮尔","达芙妮","多拉",
+      "伊莱恩","艾琳诺","埃琳娜","艾莉安娜","伊丽莎白","艾丽斯","艾拉","艾莉",
+      "埃米莉","艾玛","珠儿","桑迪","香农","雪莉","亚历山德拉","凯琳",
+      "金柏莉","麦迪","玛凯拉","玛乔丽","奥林","蒂根","维加","温妮弗雷德",
+      "阿达琳","伊莱克特拉","赛琳娜","莎娜"],
+    },
+  };
+  // ==== NAMES END ====
+
+  var CAPTURE = false;                  // 是否正在等待玩家按键
+
+  var state = {
+    page: "overview",
+    settlers: [], settlements: [], jobs: [], here: "", pong: false,
+    pickedSettler: -1,
+    beds: null, edges: [], summoned: {},
+    allJobs: [],                    // 本据点全部工位（G 行）
+    pickedJobRow: -1,               // 岗位页正在挑人的那个工位
+    pickedKindRow: -1,              // 岗位页选中的"类别合并行"（农民/守卫）
+    flagOverride: null,             // 三个开关的乐观值（点完立刻显示，等回推确认后就清掉）
+    pickMode: "",                   // 居民页的指派面板："" / "job" / "caravan"
+    selSettle: 0, selSettleId: null,
+    expanded: false,                                  // 总览里展开的是否是 selSettle（合并据点页后新增）
+    filter: "all", sort: "status",
+    // hotkey 用虚拟键码：121 = 0x79 = VK_F10（老配置是扫描码空间，68 在 VK 里是 D）。
+    // 迁移标记**不能**放这里：loadCfg 是把存档字段合并到默认值上，
+    // 默认值里的标记会让"是否需要迁移"永远判断错（踩过）。
+    cfg: { zoom: 1, fs: 1, theme: "green", sortDefault: "status", toasts: true, lang: "zh", hotkey: 121 }
+  };
+
+  // 关闭：优先请插件即时收（原生层），Papyrus 那条用于同步状态（两条都幂等）
+  function closeNow() {
+    if (typeof window.smNativeClose === "function") { try { window.smNativeClose(); } catch (err) {} }
+    smAct("smClose");
+  }
+  function smAct(evName) {
+    try { if (window.prisma && window.prisma.emit) window.prisma.emit(evName); } catch (e) {}
+  }
+  // 带字符串参数的动作（改名用）。桥收到的字符串是原样转给 Papyrus 的，不做 JSON 包装。
+  function smActP(evName, payload) {
+    try { if (window.prisma && window.prisma.emit) window.prisma.emit(evName, String(payload == null ? "" : payload)); } catch (e) {}
+  }
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  var lastBridge = "";        // 记住最后一次桥状态，语言切换后要按新语言重画
+  function setBridge(txt) {
+    lastBridge = txt;
+    var el = document.getElementById("bridge");
+    if (el) el.textContent = t("bridge") + txt;
+  }
+
+  function loadCfg() {
+    try {
+      var raw = window.localStorage && window.localStorage.getItem("sm_cfg");
+      if (raw) { var o = JSON.parse(raw); for (var k in o) state.cfg[k] = o[k]; }
+    } catch (e) {}
+    state.sort = state.cfg.sortDefault;
+    applyCfg();
+  }
+  // 热键键码空间迁移（扫描码 → VK）：标记存在独立的 localStorage 键里，
+  // 因为 loadCfg 会把 sm_cfg 的字段合并进默认值，cfg 里放标记判断不准（踩过）。
+  // 不迁的话老配置里 68（当年表示 F10）会被当成 VK 的 'D' 推回游戏，走动就会开面板。
+  var HOTKEY_VER_KEY = "sm_hotkey_ver";
+  function migrateHotkeySpace() {
+    try {
+      var ls = window.localStorage;
+      if (!ls || ls.getItem(HOTKEY_VER_KEY) === "2") return;
+      state.cfg.hotkey = 121;                  // VK_F10
+      ls.setItem(HOTKEY_VER_KEY, "2");
+      saveCfg();
+    } catch (e) {}
+  }
+  function saveCfg() {
+    try { window.localStorage.setItem("sm_cfg", JSON.stringify(state.cfg)); } catch (e) {}
+  }
+  // 分辨率自适应：以 1080p 为基准。1080p → 自动系数 1（与改动前一致）；
+  // 2K ≈ 1.33、4K = 2，这样面板占屏比例与文字物理大小在各分辨率下保持一致。
+  // 用户的「界面缩放」作为乘数叠加上去。
+  function autoScale() {
+    var h = window.innerHeight || 1080;
+    return Math.min(2, Math.max(1, h / 1080));
+  }
+  function applyCfg() {
+    document.documentElement.setAttribute("data-theme", state.cfg.theme);
+    document.documentElement.lang = (state.cfg.lang === "en") ? "en" : "zh-CN";
+    document.documentElement.style.setProperty("--s", autoScale() * (state.cfg.zoom || 1));
+    document.documentElement.style.setProperty("--fs", state.cfg.fs);
+  }
+  window.addEventListener("resize", function () { applyCfg(); });
+
+  // 数据格式（Papyrus 推来，行 + 竖线分隔）：
+  //   H|当前据点名
+  //   S|据点ID|据点名|人口|无业|食物|水|电|防|床|缺食|缺水|缺床|幸福度|是否已加载
+  //   E|搬运工居所据点ID|目的地据点ID      （一条供应线边，用来并出供应网络）
+  //   W|居民名|状态(0无业 1在岗 2队友)|岗位名|开关(能否指挥/迁走/运输)|有无床|性别(0男 1女)
+  //   J|空闲岗位名
+  // 一条居民数据（W 行）→ 对象。实时数据和"暂存明细"共用，避免两处解析写法漂移。
+  function parseWLine(f) {
+    return { name: f[1] || "", st: parseInt(f[2], 10) || 0,
+      jobs: f[3] || "", flags: f[4] || "000", bed: f[5] === "1",
+      sex: parseInt(f[6], 10) || 0,
+      // 第 8 字段：职业类别（同 Papyrus 的 KIND_*）。老数据没有这个字段时按状态退化推导。
+      kind: (f[7] === undefined || f[7] === "")
+        ? ((parseInt(f[2], 10) === 2) ? 7 : (parseInt(f[2], 10) === 3 ? 5 : 0))
+        : (parseInt(f[7], 10) || 0),
+      // 第 9 字段：S.P.E.C.I.A.L. 打包串（力量-感知-耐力-魅力-智力-敏捷-幸运，基础值）
+      special: (f[8] === undefined || f[8] === "") ? "" : String(f[8]),
+      // 第 10 字段：他在自己那个工种上还能不能再接一个空位（Papyrus 按原版产能上限算的）
+      spare: f[9] === "1" };
+  }
+
+  // 某据点的"暂存明细"（CD| 行开头，后面跟它的 H/W/B/J 行）—— 单独存一份给展开用，
+  // 不和"当前据点"的实时数据混在一起。
+  function parseCachedDetail(lines) {
+    var id = parseInt(String(lines[0]).split("|")[1], 10);
+    var set = [], jobs = [], beds = null;
+    for (var ci = 1; ci < lines.length; ci++) {
+      var f = String(lines[ci]).split("|");
+      if (f[0] === "W") set.push(parseWLine(f));
+      else if (f[0] === "B") beds = { total: +f[1] || 0, assigned: +f[2] || 0, free: +f[3] || 0 };
+      else if (f[0] === "J") jobs.push(f[1] || "");
+    }
+    state.cachedDetail = { id: id, settlers: set, beds: beds, jobs: jobs };
+  }
+
+  function smOnData(text) {
+    var rawLines = String(text || "").split("\n");
+    if (rawLines.length && rawLines[0].indexOf("CD|") === 0) {
+      parseCachedDetail(rawLines);
+      render();
+      return;
+    }
+    var lines = String(text || "").split("\n");
+    var settlers = [], settlements = [], jobs = [], allJobs = [], here = "", beds = null, edges = [];
+    for (var i = 0; i < lines.length; i++) {
+      if (!lines[i]) continue;
+      var f = lines[i].split("|");
+      if (f[0] === "P") { state.pong = true; setBridge(t('bridgeOk')); }
+      else if (f[0] === "K") {
+        // Papyrus 报来它当前注册的热键；与本机偏好不一致时同步过去
+        // （同步后两边值相等，不会来回发）
+        var hk = parseInt(f[1], 10) || 0;
+        state.hotkeyInGame = hk;
+        // 热键**以游戏（存档）为准**：两边不一致时采用游戏的值，而不是把它推回去。
+        // 以前是"以界面为准"，结果读档后热键会自己跳（存档里是 F10、界面偏好是 F11 →
+        // 面板一打开就把游戏改成 F11，玩家看到的就是"热键自己变了"）。
+        // 玩家在设置里改键时走的是 setCfg → smSetHotkey，两边一起更新，不依赖这条同步。
+        if (!CAPTURE && state.cfg.hotkey !== hk) {
+          state.cfg.hotkey = hk;
+          state.hotkeyInGame = hk;
+          saveCfg();
+        }
+      }
+      else if (f[0] === "H") { here = f[1] || ""; }
+      else if (f[0] === "S") {
+        settlements.push({ id: parseInt(f[1], 10), name: f[2] || "", pop: +f[3] || 0,
+          idle: +f[4] || 0, food: +f[5] || 0, water: +f[6] || 0, power: +f[7] || 0,
+          def: +f[8] || 0, beds: +f[9] || 0, missFood: +f[10] || 0, missWater: +f[11] || 0,
+          missBeds: +f[12] || 0, happiness: +f[13] || 0, loaded: f[14] === "1",
+          // 第 16 字段：岗位数（需要居民的工位总数）。-1 = 还没在那边数过（对象只在据点加载时读得到）
+          jobs: (f[15] === undefined || f[15] === "") ? -1 : (parseInt(f[15], 10)),
+          // 第 17 字段：覆盖全部岗位至少需要几名居民（游戏侧已按"每人能兼几个"折算）。-1 = 还没在那边数过
+          needWorkers: (f[16] === undefined || f[16] === "") ? -1 : (parseInt(f[16], 10)) });
+      } else if (f[0] === "W") {
+        settlers.push(parseWLine(f));
+      } else if (f[0] === "G") {
+        // 全部工位：G|工位名|类别|占用者名（空 = 空缺）。岗位页按它渲染、按它的行号发动作。
+        allJobs.push({ name: f[1] || "", kind: parseInt(f[2], 10) || 0, worker: f[3] || "" });
+      } else if (f[0] === "E") {
+        edges.push([parseInt(f[1], 10), parseInt(f[2], 10)]);
+      } else if (f[0] === "B") {
+        beds = { total: +f[1] || 0, assigned: +f[2] || 0, free: +f[3] || 0 };
+      } else if (f[0] === "J") { jobs.push(f[1] || ""); }
+    }
+    // 改名已经落地（推送里的名字和草稿一致）→ 丢掉草稿，之后以游戏数据为准
+    if (state.__renameDraft && settlers[state.__renameDraft.picked] &&
+        settlers[state.__renameDraft.picked].name === state.__renameDraft.v) {
+      state.__renameDraft = null;
+    }
+    // 游戏回推的开关值已经和乐观值一致 → 去掉覆盖（之后以游戏数据为准）
+    if (state.flagOverride) {
+      var ovp = state.flagOverride, ovr = settlers[ovp.picked];
+      if (!ovr) { state.flagOverride = null; }
+      else {
+        var idxf = ovp.code === "C" ? 0 : (ovp.code === "M" ? 1 : 2);
+        if ((ovr.flags || "000").charAt(idxf) === (ovp.v === 1 ? "1" : "0")) { state.flagOverride = null; }
+      }
+    }
+    state.settlers = settlers; state.settlements = settlements; state.jobs = jobs;
+    state.allJobs = allJobs;
+    state.edges = edges;
+    state.beds = beds;
+    state.here = here;
+    if (state.pickedSettler >= settlers.length) state.pickedSettler = -1;
+    // 据点数组的顺序由 Papyrus 每次推送决定（现在那边按 ID 排过序，但别依赖它）：
+    // 选中项按**ID**记住，每次收到数据重新定位下标，这样"选中的据点"不会变。
+    if (state.selSettleId != null) {
+      var found = -1;
+      for (var sj = 0; sj < settlements.length; sj++) {
+        if (settlements[sj].id === state.selSettleId) { found = sj; break; }
+      }
+      state.selSettle = (found >= 0) ? found : 0;
+    }
+    if (settlements.length && (state.selSettleId == null || state.selSettle === 0)) {
+      state.selSettleId = settlements[state.selSettle].id;
+    }
+    if (state.selSettle >= settlements.length) state.selSettle = 0;
+    document.getElementById("where").textContent = here ? (t("cur") + here) : "不在据点范围内";
+    render();
+  }
+
+  function renderChrome() {
+    document.title = t("brand");
+    var b = document.getElementById("brand"); if (b) b.textContent = t("brand");
+    var cb = document.getElementById("closeBtn"); if (cb) cb.textContent = t("close");
+    var yes = document.getElementById("confirmYes"); if (yes) yes.textContent = t("ok");
+    var no = document.getElementById("confirmNo"); if (no) no.textContent = t("cancel");
+    var pages = ["overview", "people", "jobs", "settings"];
+    for (var i = 0; i < pages.length; i++) {
+      var nb = document.querySelector('#nav button[data-page="' + pages[i] + '"]');
+      if (nb) nb.textContent = t("nav_" + pages[i]);
+    }
+    var br = document.getElementById("bridge");
+    if (br) br.textContent = t("bridge") + (lastBridge || t("checking"));
+    var wh = document.getElementById("where");
+    if (wh) wh.textContent = state.pong ? (state.here ? (t("cur") + state.here) : t("nowhere")) : "—";
+  }
+
+  function go(p) {
+    state.page = p;
+    var pages = ["overview", "people", "jobs", "settings"];
+    for (var i = 0; i < pages.length; i++) {
+      var sec = document.getElementById("page-" + pages[i]);
+      if (sec) sec.className = "page" + (pages[i] === p ? " on" : "");
+      var nb = document.querySelector('#nav button[data-page="' + pages[i] + '"]');
+      if (nb) nb.className = (pages[i] === p) ? "on" : "";
+    }
+    renderChrome();
+    document.getElementById("title").textContent = t("title_" + p);
+    var hintText = t("hint_" + p);
+    // 居民/岗位两页的明细永远只描述"当前所在"的据点，把这点写在标题旁边
+    if ((p === "people" || p === "jobs") && state.here) {
+      hintText = t("actingOn", { here: state.here }) + "　·　" + hintText;
+    }
+    document.getElementById("hint").textContent = hintText;
+    render();
+  }
+
+  function renameDraftChanged() {
+    var box = document.getElementById("renameInput");
+    if (!box) return;
+    state.__renameDraft = { picked: state.pickedSettler, v: box.value, pos: box.selectionStart };
+  }
+
+  // 重绘会重建 DOM，滚动位置会丢（玩家反馈：居民详情"有时自己回到顶部"）。
+  // 记下各滚动容器的位置，重绘后还原 —— DOM 结构在同一页里是稳定重建的，按顺序对得上。
+  function snapScroll() {
+    var out = [], nodes = document.querySelectorAll(".panel");
+    for (var i = 0; i < nodes.length; i++) out.push(nodes[i].scrollTop);
+    return out;
+  }
+  function restoreScroll(snap) {
+    var nodes = document.querySelectorAll(".panel");
+    for (var i = 0; i < nodes.length && i < snap.length; i++) nodes[i].scrollTop = snap[i];
+  }
+
+  function render() {
+    // 重绘前记下"正在输入"的改名内容：数据推送会触发重绘，不保留的话
+    // 玩家还没点确定就被还原成原名（玩家反馈"不快点点确认会被重置""前几秒会还原"）。
+    // 注意：**焦点已经离开输入框时也要保留** —— 玩家点「确定改名」后焦点就离开了，
+    // 这时若正好有一次推送回来（打开面板的头几秒推送很密集），文本会被冲回原名。
+    var scrollSnap = snapScroll();      // 重绘前记下滚动位置，重绘后还原
+    var ri = document.getElementById("renameInput");
+    var hadFocus = !!(ri && document.activeElement === ri);
+    if (hadFocus) {
+      state.__renameDraft = { picked: state.pickedSettler, v: ri.value, pos: ri.selectionStart };
+    }
+    if (state.page === "overview") renderOverview();
+    else if (state.page === "people") renderPeople();
+    else if (state.page === "jobs") renderJobs();
+    else if (state.page === "settings") renderSettings();
+    localizeDom(document.getElementById("app"));
+    restoreScroll(scrollSnap);
+    // 恢复草稿（同一个居民时才恢复）。焦点只在"重绘前本来就聚焦"时才抢回来，
+    // 否则会从「确定改名」按钮上把焦点拽走。
+    var draft = state.__renameDraft;
+    if (draft && draft.picked === state.pickedSettler) {
+      var ri2 = document.getElementById("renameInput");
+      if (ri2) {
+        ri2.value = draft.v;
+        if (hadFocus) {
+          try { ri2.setSelectionRange(draft.pos, draft.pos); } catch (e) {}
+          ri2.focus();
+        }
+      }
+    }
+  }
+  function toast(msg) { if (state.cfg.toasts) document.getElementById("hint").textContent = msg; }
+
+  // ======================= 总览（唯一的据点管理页） =======================
+  // 原来"据点页"的内容已经并进来：点一行就**就地展开**那个据点的明细与批量操作。
+  function severity(s) {
+    return (s.missFood ? 2 : 0) + (s.missWater ? 2 : 0) + (s.missBeds ? 2 : 0) + (s.idle > 0 ? 1 : 0);
+  }
+  // 状态圆点：**看整个网络补不补得上**（玩家要求）。
+  //   ok（绿）  = 没有短缺
+  //   warn（黄）= 有短缺，但网络内能补上（网络总产量 ≥ 网络总需求）
+  //   bad（红） = 网络也补不上；缺床一律红 —— 供应线共享的是**食物和水**，床位不共享
+  function netStatus(s, group) {
+    var short = (s.missFood || 0) + (s.missWater || 0) + (s.missBeds || 0);
+    if (!short) return "ok";
+    var foodOK = !s.missFood || (group && group.food >= group.pop);
+    var waterOK = !s.missWater || (group && group.water >= group.pop);
+    return (foodOK && waterOK && !s.missBeds) ? "warn" : "bad";
+  }
+  // 展开后的明细块（= 原据点页右栏下半部分）：床位段、空闲岗位、批量操作。
+  // 明细（居民/床位/岗位）只有**当前所在**的据点有数据，别的据点只能看汇总数值。
+  // 从据点详情"跳过去"：只有**当前所在**的据点才有居民 / 工位明细可操作，
+  // 别的据点跳过去也只会看到当前据点的数据 —— 所以给一句说明，不做假动作。
+  function jumpFromSettle(p) {
+    var s = state.settlements[state.selSettle];
+    if (s && s.name === state.here) { go(p); return; }
+    toast(t('onlyHereJump'));
+  }
+  function goToPeoplePage() { jumpFromSettle("people"); }
+  function goToJobsPage() { jumpFromSettle("jobs"); }
+
+  // 居民概况：按职业类别数一遍（和居民页标签栏同一套分类，名字也复用 kindInfo）。点一下去居民页。
+  function settlerSummary(settlers) {
+    var list = settlers || [];
+    var counts = {};
+    list.forEach(function (r) { counts[r.kind] = (counts[r.kind] || 0) + 1; });
+    var parts = [];
+    [1, 2, 3, 4, 5, 6, 7, 0].forEach(function (k) {      // 有人的类别才显示；无业（0）放最后
+      if (counts[k]) parts.push('<span class="jchip">' + kindInfo(k).l + ' ' + counts[k] + '</span>');
+    });
+    return '<h2 class="clickable" onclick="goToPeoplePage()">' + t('peopleSummary', { n: list.length }) + '</h2>' +
+      '<div class="panel jobchips clickable" onclick="goToPeoplePage()" style="flex:none; padding:calc(9px * var(--s)) calc(12px * var(--s))">' +
+      (parts.length ? parts.join("") : '<span class="empty">' + t('noResidents') + '</span>') + '</div>';
+  }
+
+  // 全部工位：**有人（绿）/ 空缺（黄）**用颜色区分；点一下去岗位页。
+  // 有人 = 居民名下工位对象的名字（居民数据里那串用"、"连起来的），空缺 = 空闲工位列表；
+  // 搬运工的"岗位"是"→ 目的地"，不是工位对象，跳过。
+  function jobsSection(settlers, jobs) {
+    var taken = {}, free = {};
+    (jobs || []).forEach(function (j) { free[j] = (free[j] || 0) + 1; });
+    (settlers || []).forEach(function (r) {
+      if (r.kind === 5 || !r.jobs) return;
+      // 注意：无业居民的 jobs 字段是**一个空格**（不是空串），必须先 trim 再判断 ——
+      // 否则会多出一个名字是空白的幽灵工位（实测出现过 "  ×4" 这种标签）。
+      String(r.jobs).split("、").forEach(function (n) {
+        var nm = String(n).replace(/^\s+|\s+$/g, "");
+        if (nm) taken[nm] = (taken[nm] || 0) + 1;
+      });
+    });
+    function chips(map, cls) {
+      return Object.keys(map).sort().map(function (k) {
+        return '<span class="jchip ' + cls + '">' + esc(k) + (map[k] > 1 ? ' ×' + map[k] : '') + '</span>';
+      }).join("");
+    }
+    var takenN = 0, freeN = 0;
+    Object.keys(taken).forEach(function (k) { takenN += taken[k]; });
+    Object.keys(free).forEach(function (k) { freeN += free[k]; });
+    var total = takenN + freeN;
+    return '<h2 class="clickable" style="margin-top:calc(12px * var(--s))" onclick="goToJobsPage()">' +
+      t('allJobs', { n: total, taken: takenN, free: freeN }) + '</h2>' +
+      '<div class="panel jobchips clickable" onclick="goToJobsPage()" style="flex:none; padding:calc(9px * var(--s)) calc(12px * var(--s))">' +
+      (total ? chips(taken, "taken") + chips(free, "vacant") : '<span class="empty">' + t('noJobs') + '</span>') + '</div>';
+  }
+
+  // 居民概况 + 床位段 + 全部工位（实时和"暂存数据"共用同一套渲染）
+  function bedJobsBlock(beds, settlers, jobs) {
+    var noBedCount = 0;
+    for (var nb = 0; nb < (settlers || []).length; nb++) { if (!settlers[nb].bed) noBedCount++; }
+    return settlerSummary(settlers) +
+      (beds ? '<h2 style="margin-top:calc(12px * var(--s))">' + t('bedSection') + '</h2>' +
+        '<div class="panel" style="flex:none; padding:calc(10px * var(--s)) calc(12px * var(--s))">' +
+        '<div style="font-size:calc(18px * var(--s) * var(--fs))">' +
+        t('bedTotal') + ' ' + beds.total + '　' + t('bedAssigned') + ' ' + beds.assigned +
+        '　' + t('bedFree') + ' ' + beds.free + '<br>' +
+        t('bedMissing') + ' ' + noBedCount + '</div></div>' : '') +
+      jobsSection(settlers, jobs);
+  }
+
+  // 展开后的明细块（原来"据点页"的内容，现在就地展开）。
+  //   当前所在据点 → 实时数据 + 批量操作按钮；
+  //   别的据点     → **暂存数据**（玩家方案：离开时存下，回去再刷新），没有暂存就给提示。
+  function settleDetail(s) {
+    if (s.name !== state.here) {
+      var cd = state.cachedDetail;
+      if (cd && cd.id === s.id) {
+        return '<div class="netdetail">' +
+          '<div class="netstale">' + t('cachedNote') + '</div>' +
+          bedJobsBlock(cd.beds, cd.settlers, cd.jobs) + '</div>';
+      }
+      return '<div class="netdetail empty" style="color:#d8a13a">' +
+        (state.here ? t('detailNotHere', { here: esc(state.here) }) : t('detailNoSettle')) +
+        '<br>' + t('detailCachedPending') + '</div>';
+    }
+    if (!s.loaded) {
+      return '<div class="netdetail empty" style="color:#d8a13a">' + t('detailFar') + '</div>';
+    }
+    return '<div class="netdetail">' +
+      bedJobsBlock(state.beds, state.settlers, state.jobs) + '</div>';
+  }
+
+  function renderOverview() {
+    var el = document.getElementById("page-overview");
+    if (!state.settlements.length) { el.innerHTML = '<div class="empty">' + t('noOwned') + '</div>'; return; }
+
+    // 一行 = 一个据点的**完整明细**（人口/食物/水/电/防/床/幸福/岗位 + 缺食/缺水/缺床/缺人标记）
+    function settleRow(s, group, expanded) {
+      var i = state.settlements.indexOf(s);
+      var cls = netStatus(s, group);
+      var flags = [];
+      if (s.missFood) flags.push("<b>" + t('missFood') + " " + s.missFood + "</b>");
+      if (s.missWater) flags.push("<b>" + t('missWater') + " " + s.missWater + "</b>");
+      if (s.missBeds) flags.push("<b>" + t('missBedSp') + " " + s.missBeds + "</b>");
+      if (s.idle > 0) flags.push("<i>" + t('idleCount') + " " + s.idle + "</i>");
+      // 缺人 = 覆盖全部岗位所需人数 − 人口（**按"每人能兼几个"折算过**：46 个铃薯岗位只要 8 人，
+      // 不是 46 人）。供应线帮不上忙：人不共享，所以这是"要派人来"的提示。
+      if (s.needWorkers >= 0 && s.needWorkers > s.pop) flags.push("<i>" + t('shortStaff') + " " + (s.needWorkers - s.pop) + "</i>");
+      return '<div class="scard in-net' + (expanded ? " sel" : "") + '" onclick="expandSettle(' + i + ')">' +
+        '<span class="dot ' + cls + '"></span>' +
+        // 这里原来挂了个「（当前所在）」标记表示"这一行已展开" —— 语义完全是错的
+        // （玩家反馈：传送走之后它还标着当前所在）。展开状态本来就有高亮，不需要文字标记。
+        '<span class="sname">' + esc(s.name) + '</span>' +
+        '<span class="stats">' + t('popSp') + s.pop + '　' + t('foodSp') + s.food + '　' + t('waterSp') + s.water +
+        '　' + t('powerSp') + s.power + '　' + t('defSp') + s.def + '　' + t('bedsSp') + s.beds +
+        '　' + t('happySp') + s.happiness +
+        (s.jobs >= 0 ? '　' + t('jobCountSp') + s.jobs : '') +
+        (s.needWorkers >= 0 ? '（' + t('needStaffSp', { n: s.needWorkers }) + '）' : '') + '</span>' +
+        '<span class="flags ' + cls + '">' + (flags.join("　") || '<span style="color:var(--accent)">' + t('healthy') + '</span>') + '</span></div>';
+    }
+    // 组内排序：**当前所在据点永远排第一**（玩家要求），其余跟着页面上那两个按钮走
+    function sortMembers(arr) {
+      var out = arr.slice();
+      if (state.sort === "name") out.sort(function (a, b) { return a.name.localeCompare(b.name); });
+      else out.sort(function (a, b) { return (severity(b) - severity(a)) || a.name.localeCompare(b.name); });
+      var hereIdx = -1;
+      for (var hi = 0; hi < out.length; hi++) { if (out[hi].name === state.here) { hereIdx = hi; break; } }
+      if (hereIdx > 0) { var h = out.splice(hereIdx, 1)[0]; out.unshift(h); }
+      return out;
+    }
+    // 一组里的每一行；展开的那个再跟一块明细
+    function groupRows(members, group) {
+      var html = "";
+      sortMembers(members).forEach(function (m) {
+        var expanded = state.expanded && m === state.settlements[state.selSettle];
+        html += settleRow(m, group, expanded);
+        if (expanded) html += settleDetail(m);
+      });
+      return html;
+    }
+
+    var nets = supplyNetworks();
+    var iso = state.isolatedSettlements || [];
+
+    var html = '<div class="filters">' +
+      '<button class="' + (state.sort === "status" ? "on" : "") + '" onclick="setSort(\'status\')">' + t('bySeverity') + '</button>' +
+      '<button class="' + (state.sort === "name" ? "on" : "") + '" onclick="setSort(\'name\')">' + t('byName') + '</button>' +
+      '<button class="btn" onclick="smAct(\'smRefresh\')">' + t('refresh') + '</button></div>';
+
+    // 没有供应线时，所有据点都在"未接入"那一组里，标题就用它，避免出现"合计"字样
+    html += '<h2>' + (nets.length ? t('netTitle') : t('netIsolated', { n: iso.length })) + '</h2><div class="panel">';
+    // 有当前所在据点的那一组排最前（这样"当前所在据点"就是整页第一行）
+    var hereNet = null;
+    nets.forEach(function (n) {
+      n.members.forEach(function (m) { if (m.name === state.here) hereNet = n; });
+    });
+    if (hereNet) {
+      nets = [hereNet].concat(nets.filter(function (n) { return n !== hereNet; }));
+    }
+    nets.forEach(function (n, ni) {
+      var names = n.members.map(function (m) { return m.name; });
+      html += '<div class="nethead">' + t('netLabel', { n: ni + 1 }) + '：' + esc(names.join("、")) +
+        '　<span class="tot">' + t('netTotal') + ' ' + t('netPop') + ' ' + n.pop + '　' +
+        t('netFood') + ' ' + n.food + '　' + t('netWater') + ' ' + n.water + '</span></div>';
+      html += groupRows(n.members, n);
+    });
+    // 没接入任何供应网的据点：单列一组，**不给合计**（它们之间不共享资源）
+    if (iso.length) {
+      if (nets.length) html += '<div class="nethead">' + t('netIsolated', { n: iso.length }) + '</div>';
+      html += groupRows(iso, null);
+    }
+    html += '</div>';
+    el.innerHTML = html;
+  }
+
+  function supplyNetworks() {
+    var parent = {};
+    function find(x) { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }
+    function union(a, b) { var ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; }
+    var i;
+    for (i = 0; i < state.settlements.length; i++) {
+      var sid = state.settlements[i].id;
+      if (sid != null && !isNaN(sid)) parent[sid] = sid;
+    }
+    for (i = 0; i < state.edges.length; i++) {
+      var a = state.edges[i][0], b = state.edges[i][1];
+      if (parent[a] == null) parent[a] = a;
+      if (parent[b] == null) parent[b] = b;
+      union(a, b);
+    }
+    var groups = {};
+    for (i = 0; i < state.settlements.length; i++) {
+      var s = state.settlements[i];
+      if (s.id == null || isNaN(s.id) || parent[s.id] == null) continue;
+      var root = find(s.id);
+      if (!groups[root]) groups[root] = { members: [], pop: 0, food: 0, water: 0 };
+      groups[root].members.push(s);
+      groups[root].pop += s.pop; groups[root].food += s.food; groups[root].water += s.water;
+    }
+    var out = [], isolated = [];
+    for (var k in groups) {
+      if (groups[k].members.length > 1) out.push(groups[k]);
+      else isolated.push(groups[k].members[0]);          // 只连着自己 = 没接入任何供应网
+    }
+    out.sort(function (x, y) { return y.pop - x.pop; });
+    state.isolatedSettlements = isolated;
+    return out;
+  }
+
+  function setSort(m) { state.sort = m; state.cfg.sortDefault = m; saveCfg(); render(); }
+  // 点总览里的一行：就地展开/收起那个据点的明细与批量操作
+  // （这就是原来"据点页"的内容，合并后不再单开一页）
+  function expandSettle(i) {
+    if (state.expanded && state.selSettle === i) {
+      state.expanded = false;          // 再点一次收起
+    } else {
+      pickSettle(i);
+      state.expanded = true;
+      // 让游戏把这个据点的"暂存明细"推过来（当前据点也会回，内容是它最新的实时数据）
+      state.cachedDetail = null;
+      smAct("smDetail" + i);
+    }
+    render();
+  }
+  // 选中据点：下标 + ID 一起记（ID 才是稳定的那个）
+  function pickSettle(i) {
+    state.selSettle = i;
+    var s = state.settlements[i];
+    if (s) state.selSettleId = s.id;
+    render();
+  }
+
+  // ======================= 据点 =======================
+  // 「一键填补空岗」「解除全部岗位」游戏侧都是作用于**玩家当前所在**的据点，
+  // 和据点页选中的那个据点无关 —— 名字必须用 state.here。
+  // （用 selSettle 会在你选了别的据点时弹出错误的据点名，玩家反馈过。）
+  function askFill() {
+    var n = state.settlers.filter(function (r) { return r.st === 0; }).length;
+    confirmAsk(t("confirmFill", { name: state.here || "—", n: n, m: state.jobs.length }),
+      function () { smAct("smFill"); });
+  }
+  // 开除（把居民移出本据点）：不可轻撤销，弹确认。
+  function askDismiss() {
+    var r = state.settlers[state.pickedSettler];
+    if (!r) return;
+    confirmAsk(t("confirmDismiss", { name: r.name }), function () {
+      smAct("smDismiss");
+      refreshAfterAction();
+    });
+  }
+  function askUnassignAll() {
+    confirmAsk(t("confirmUnassignAll", { name: state.here || "—" }), function () { smAct("smUnassignAll"); });
+  }
+
+  // ======================= 居民 =======================
+  // S.P.E.C.I.A.L.：Papyrus 传来的是 "5-4-3-2-1-6-7"（力量/感知/耐力/魅力/智力/敏捷/幸运，基础值）。
+  // 界面上做成**表格**（属性 / 值 成对两列；七项正好四行，最后一行右边留空），名字用中文全称。
+  var SPECIAL_NAMES = ["spStr", "spPer", "spEnd", "spCha", "spInt", "spAgi", "spLck"];
+  function specialTable(packed) {
+    var v = String(packed).split("-");
+    function cell(i) {
+      if (i >= SPECIAL_NAMES.length) return '<td class="spn"></td><td class="spv"></td>';
+      return '<td class="spn">' + t(SPECIAL_NAMES[i]) + '</td>' +
+             '<td class="spv">' + (v[i] === undefined ? "—" : esc(v[i])) + '</td>';
+    }
+    var rows = "";
+    for (var r = 0; r < 4; r++) {          // 左列 0-3（力量/感知/耐力/魅力），右列 4-6（智力/敏捷/幸运）
+      rows += "<tr>" + cell(r) + cell(r + 4) + "</tr>";
+    }
+    return '<table class="sptable">' + rows + '</table>';
+  }
+
+  // 职业类别：数值和 Papyrus 的 KIND_* 一一对应
+  function kindInfo(k) {
+    if (k === 1) return { l: t('jobFarmer'), c: 'farmer' };
+    if (k === 2) return { l: t('jobScav'), c: 'scav' };
+    if (k === 3) return { l: t('jobGuard'), c: 'guard' };
+    if (k === 4) return { l: t('jobVendor'), c: 'vendor' };
+    if (k === 5) return { l: t('caravan'), c: 'caravan' };
+    if (k === 6) return { l: t('jobWorker'), c: 'work' };
+    if (k === 7) return { l: t('comp'), c: 'comp' };
+    return { l: t('idle'), c: 'idle' };
+  }
+  function kindTag(r) { var k = kindInfo(r.kind); return '<span class="tag ' + k.c + '">' + k.l + '</span>'; }
+  // 某一行在「具体工作」里显示什么：农民是作物名、商人是摊位名、搬运工是「→ 目的地」
+  function jobLabel(r) {
+    if (r.kind >= 1 && r.kind <= 6) return r.jobs || t('work');
+    if (r.kind === 7) return t('compHint');
+    return "";
+  }
+  function peopleTabs() {
+    return [["all", t('all')], ["k0", t('idle')], ["k1", t('jobFarmer')], ["k2", t('jobScav')],
+            ["k3", t('jobGuard')], ["k4", t('jobVendor')], ["k5", t('caravan')],
+            ["k6", t('jobWorker')], ["k7", t('comp')], ["nobed", t('tabNobed')]];
+  }
+  function peopleCount(key) {
+    if (key === "all") return state.settlers.length;
+    if (key === "nobed") return state.settlers.filter(function (r) { return !r.bed; }).length;
+    var k = parseInt(key.slice(1), 10);
+    return state.settlers.filter(function (r) { return r.kind === k; }).length;
+  }
+
+  // 居民页：左「职业标签栏」/ 中「人员列表 + 职业状态」/ 右「具体工作 + 操作按钮」
+  function renderPeople() {
+    var el = document.getElementById("page-people");
+
+    var rows = state.settlers.map(function (r, i) { return { r: r, i: i }; });
+    if (state.filter === "nobed") rows = rows.filter(function (x) { return !x.r.bed; });
+    else if (state.filter !== "all") {
+      var fk = parseInt(String(state.filter).slice(1), 10);
+      rows = rows.filter(function (x) { return x.r.kind === fk; });
+    }
+    if (state.sort === "name") rows.sort(function (a, b) { return a.r.name.localeCompare(b.r.name); });
+    else rows.sort(function (a, b) { return (a.r.kind - b.r.kind) || a.r.name.localeCompare(b.r.name); });
+
+    var listHtml = rows.length
+      ? rows.map(function (x) {
+          var r = x.r, i = x.i;
+          // 行里只放「名字 + 职业状态」（玩家要求）：具体工作、召唤/解除都在右侧详情里，
+          // 重复放一遍既挤又容易点错。无床的人保留一个标记，那是列表一眼扫过去才知道的信息。
+          return '<div class="row' + (i === state.pickedSettler ? " sel" : "") + '" onclick="pickSettler(' + i + ')">' +
+            '<span class="name">' + esc(r.name) + '</span>' + kindTag(r) +
+            (r.bed ? '' : '<span class="tag nobed" style="margin-left:auto">' + t('bedNone') + '</span>') + '</div>';
+        }).join("")
+      : '<div class="empty">' + t('noMatch') + '</div>';
+
+    var det = '<div class="empty">' + t('pickHint') + '</div>';
+    if (state.pickedSettler >= 0 && state.settlers[state.pickedSettler]) {
+      var r2 = state.settlers[state.pickedSettler], f = r2.flags || "000";
+      // 三个原版开关的**生效值**：本地乐观值（刚点的）优先，缺省用游戏回推的。
+      // 为什么：切换要等一个来回（事件→Papyrus→WSFW→回推），不先本地翻过来的话
+      // 玩家会以为"点了没用"（玩家反馈）。
+      var flagC = f.charAt(0) === "1";
+      var flagM = f.charAt(1) === "1";
+      var flagV = f.charAt(2) === "1";
+      var ov = state.flagOverride;
+      if (ov && ov.picked === state.pickedSettler) {
+        if (ov.code === "C") flagC = (ov.v === 1);
+        else if (ov.code === "M") flagM = (ov.v === 1);
+        else if (ov.code === "V") flagV = (ov.v === 1);
+      }
+      var canCommand = flagC;
+      var canMove = flagM;
+      det = '<div style="font-size:calc(21px * var(--s)); color:var(--accent-hi); margin-bottom:calc(8px * var(--s))">' +
+          esc(r2.name) + ' ' + kindTag(r2) + '</div>' +
+        '<div class="kv">' +
+        t('labelJob') + '：<b>' + kindInfo(r2.kind).l + '</b><br>' +
+        t('jobsLabel') + '<b>' + (jobLabel(r2) ? esc(jobLabel(r2)) : '—') + '</b><br>' +
+        t('sex') + '：<b>' + (r2.sex === 1 ? t('female') : t('male')) + '</b><br>' +
+        t('beds') + '：' + (r2.bed ? t('bedYes') : '<b style="color:#ff9b9b">' + t('bedNo') + '</b>') + '</div>' +
+        (r2.special ? '<h2 style="margin-top:calc(12px * var(--s))">' + t('specialLabel') + '</h2>' +
+          specialTable(r2.special) : '') +
+        '<h2 style="margin-top:calc(14px * var(--s))">' + t('actionsTitle') + '</h2><div class="filters">' +
+        '<button class="btn" onclick="summonPicked()"' + (canCommand ? '' : ' disabled') + '>' + t('summon') + '</button>' +
+        '<button class="btn danger" onclick="unassign(' + state.pickedSettler + ')"' + (canCommand ? '' : ' disabled') + '>' + t('unassign') + '</button>' +
+        '<button class="btn" onclick="askMigrate()"' + (canMove ? '' : ' disabled') + '>' + t('migrate') + '</button>' +
+        '<button class="btn danger" onclick="askDismiss()">' + t('dismiss') + '</button>' +
+        '<button class="btn" onclick="setPickMode(\'job\')">' + t('assignJob') + '</button>' +
+        '<button class="btn" onclick="setPickMode(\'caravan\')">' + t('assignCaravan') + '</button></div>' +
+        (state.pickMode === "job" ? jobPickerForPicked() : "") +
+        (state.pickMode === "caravan" ? caravanPicker() : "") +
+        (canCommand ? '' : '<div class="renamehint">' + t('hintNoCommand') + '</div>') +
+        (canMove ? '' : '<div class="renamehint">' + t('hintNoMove') + '</div>') +
+        '<h2 style="margin-top:calc(14px * var(--s))">' + t('renameTitle') + '</h2>' +
+        '<div class="renamebar">' +
+        '<input id="renameInput" type="text" maxlength="24" value="' + esc(r2.name) + '"' +
+        ' oninput="renameDraftChanged()"' +
+        ' onkeydown="if(event.key===\'Enter\'){renameNow();event.preventDefault();}">' +
+        '<button class="btn" onclick="renameRandom()">' + t('renameRandom') + '</button>' +
+        '<button class="btn primary" onclick="renameNow()">' + t('renameApply') + '</button></div>' +
+        '<div class="renamehint">' + t('renameHint') + '</div>' +
+        '<h2 style="margin-top:calc(14px * var(--s))">' + t('flagsTitle') + '</h2><div class="filters">' +
+        flagBtn(t('flagC'), "C", flagC ? "1" : "0") + flagBtn(t('flagMove'), "M", flagM ? "1" : "0") +
+        flagBtn(t('flagCaravan'), "V", flagV ? "1" : "0") + '</div>' +
+        '<div class="renamehint">' + t('flagHint') + '</div>';
+    }
+
+    el.innerHTML =
+      '<div class="filters">' +
+      '<button class="btn" onclick="toggleSort()">' + t(state.sort === "status" ? 'sortStatus' : 'sortName') + '</button>' +
+      '<button class="btn" onclick="smAct(\'smRefresh\')">' + t('refresh') + '</button></div>' +
+      '<div class="ppl">' +
+      '<div class="ptabs">' + peopleTabs().map(function (p) {
+        return '<button class="ptab' + (state.filter === p[0] ? " on" : "") + '" onclick="setFilter(\'' + p[0] + '\')">' +
+          '<span>' + p[1] + '</span><span class="n">' + peopleCount(p[0]) + '</span></button>';
+      }).join("") + '</div>' +
+      // 中间只放"名字 + 职业状态"了，不需要那么宽（玩家反馈）；宽度让给右侧详情
+      '<div class="col" style="flex:1"><div class="panel">' + listHtml + '</div></div>' +
+      '<div class="col" style="flex:2"><h2>' + t('peopleDetail') + '</h2>' +
+      '<div class="panel" style="padding:calc(12px * var(--s)) calc(14px * var(--s))">' + det + '</div></div>' +
+      '</div>';
+  }
+  function flagBtn(label, code, on) {
+    var next = on === "1" ? 0 : 1;
+    return '<button class="' + (on === "1" ? "on" : "") + '" onclick="toggleFlag(\'' + code + '\',' + next + ')">' +
+      label + '：' + (on === "1" ? t('on') : t('off')) + '</button>';
+  }
+  function setFilter(f) { state.filter = f; render(); }
+  function toggleSort() {
+    state.sort = (state.sort === "status") ? "name" : "status";
+    state.cfg.sortDefault = state.sort; saveCfg(); render();
+  }
+  // 随机名字：**只按性别**从名字库（当前界面语言那套）里挑。
+  // 罕见名已合并进 male/female，不再有单独的名字池（玩家要求）。
+  function poolFor(sex) {
+    var lang = (state.cfg.lang === "en") ? "en" : "zh";
+    var lib = (NAMES && NAMES[lang]) || (NAMES && NAMES.en) || { male: [], female: [] };
+    var pool = (sex === 1) ? (lib.female || []) : (lib.male || []);
+    return pool;
+  }
+  function renameRandom() {
+    var r = state.settlers[state.pickedSettler];
+    if (!r) return;
+    var pool = poolFor(r.sex);
+    if (!pool.length) { toast(t("renameNoLib")); return; }
+    document.getElementById("renameInput").value = pool[Math.floor(Math.random() * pool.length)];
+  }
+  function renameNow() {
+    var box = document.getElementById("renameInput");
+    if (!box) return;
+    var name = String(box.value || "").replace(/^\s+|\s+$/g, "");
+    if (!name) { toast(t("renameEmpty")); return; }
+    smActP("smRename", name);
+    toast(t("renameSent", { name: name }));
+  }
+  // 召唤：把居民拉到你身边（Papyrus 侧 MoveTo 玩家）。
+  // 对**运输人员**，必须召唤过才允许解除岗位 —— 他在路上时你看不到他，
+  // 直接解除容易搞错人（玩家要求）。
+  function summonPicked() {
+    if (state.pickedSettler < 0) return;
+    smAct("smSummon");
+    state.summoned[state.pickedSettler] = true;
+    render();
+  }
+  function pickSettler(i) { state.pickedSettler = i; smAct("smPickSettler" + i); render(); }
+  // 动作后连续刷新几次：引擎清"搬运工身份 / 供应线集合"比断线晚（连线先断，
+  // GetCaravanDestinationID 与 CaravanActorAliases 随后才更新），只刷一次会读到旧状态，
+  // 表现就是"地图上已断线，界面里还写着运输"（玩家反馈）。多刷几次直到数据跟上。
+  function refreshAfterAction() {
+    [800, 2000, 4000, 7000].forEach(function (ms) {
+      window.setTimeout(function () { smAct("smRefresh"); }, ms);
+    });
+  }
+  function unassign(i) {
+    optimisticUnassign(i); render(); smAct("smUnassign" + i); refreshAfterAction(); }
+  // 点击立刻变（乐观更新）+ 立刻重绘：实际生效由游戏侧稍后通知，图标/操作可用性当场就变
+  function toggleFlag(code, value) {
+    state.flagOverride = { picked: state.pickedSettler, code: code, v: value };
+    smAct("smFlag" + code + value);
+    render();
+  }
+  function askMigrate() {
+    if (state.pickedSettler < 0) return;
+    var who = state.settlers[state.pickedSettler];
+    var options = [];
+    for (var i = 0; i < state.settlements.length; i++) {
+      if (state.settlements[i].name !== state.here) options.push({ i: i, name: state.settlements[i].name });
+    }
+    if (!options.length) { confirmAsk(t('noOtherSettle'), null); return; }
+    confirmAsk(t("pickDest", { name: who.name }), null, options, function (idx) {
+      smAct("smMigrateTo" + idx);
+      refreshAfterAction();
+    });
+  }
+
+  // ======================= 岗位（配对工作台）=======================
+  // ---- 乐观更新：动作在界面上**当场**见效，实际生效由游戏侧稍后通知 ----
+  // 做法是直接改本地这份数据（renderer 读的就是它）；下一次推送会整份覆盖，
+  // 所以本地改动天然只"活到游戏回话"，不会盖住真实状态（玩家要求：不要看起来没反应）。
+  function localSettler(i) { return (state.settlers || [])[i]; }
+  function localJob(j) { return (state.allJobs || [])[j]; }
+  function optimisticAssign(settlerIdx, jobIdx) {
+    var r = localSettler(settlerIdx), j = localJob(jobIdx);
+    if (!r || !j) return;
+    var prev = j.worker;
+    j.worker = r.name;
+    r.st = 1;
+    r.kind = j.kind;
+    r.jobs = j.name;
+    r.bed = r.bed;
+    if (prev) {                       // 被顶掉的那位当场变无业
+      (state.settlers || []).forEach(function (x) { if (x.name === prev) { x.st = 0; x.kind = 0; x.jobs = ""; } });
+    }
+  }
+  function optimisticAssignKind(settlerIdx, kindCode) {
+    var r = localSettler(settlerIdx);
+    if (!r) return;
+    r.st = 1;
+    r.kind = kindCode;
+    var first = null;
+    (state.allJobs || []).forEach(function (j) { if (!first && !j.worker && j.kind === kindCode) first = j; });
+    if (first) { r.jobs = first.name; first.worker = r.name; }
+  }
+  function optimisticCaravan(settlerIdx, destName) {
+    var r = localSettler(settlerIdx);
+    if (!r) return;
+    r.st = 3;
+    r.kind = 5;
+    r.jobs = "→ " + destName;
+  }
+  function optimisticUnassign(settlerIdx) {
+    var r = localSettler(settlerIdx);
+    if (!r) return;
+    r.st = 0; r.kind = 0; r.jobs = "";
+    (state.allJobs || []).forEach(function (j) { if (j.worker === r.name) j.worker = ""; });
+  }
+
+  // ======================= 岗位（以工位为主） =======================
+  // 玩家要求：这一页**以岗位为主** —— 列出本据点所有工位（不只是空缺），点一个工位就给它挑人。
+  // 和居民页（点一个人给他派活，含派运输线）正好是相反方向的两套入口。
+  // 能"一人多岗"的类别（农民=食物 / 守卫=防御）：岗位页把同类工位**合并成一条**来派人
+  // （玩家要求：这两类一人可多产出；商人和工人是一对一，保持一岗一行）。
+  function kindIsMulti(k) { return k === 1 || k === 3; }
+
+  // 岗位页的一行行（合并行 / 单岗行都在这里生成）
+  function jobsRowsHtml(jobs) {
+    var groups = [], byKind = {};
+    jobs.forEach(function (j, i) {
+      if (!byKind[j.kind]) { byKind[j.kind] = { kind: j.kind, items: [] }; groups.push(byKind[j.kind]); }
+      byKind[j.kind].items.push({ j: j, i: i });
+    });
+    var selKind = state.pickedKindRow, selPost = state.pickedJobRow;
+    var html = "";
+    groups.forEach(function (g) {
+      html += '<div class="nethead">' + kindInfo(g.kind).l + '（' + g.items.length + '）</div>';
+      if (kindIsMulti(g.kind)) {
+        // 合并行：把同类工位名按数量写在一起，占用者列出来
+        var takenN = 0, names = {}, order = [], workers = [];
+        g.items.forEach(function (x) {
+          if (names[x.j.name] === undefined) { names[x.j.name] = 0; order.push(x.j.name); }
+          names[x.j.name]++;
+          if (x.j.worker) {
+            takenN++;
+            // 一个人可以兼多个同类工位 —— 名字**去重**（玩家反馈：同一人重复列了好几次）
+            if (workers.indexOf(x.j.worker) < 0) workers.push(x.j.worker);
+          }
+        });
+        var label = order.map(function (n) { return esc(n) + (names[n] > 1 ? ' ×' + names[n] : ''); }).join("　");
+        var on = (selKind === g.kind);
+        html += '<div class="row kmrow' + (on ? " sel" : "") + '" onclick="pickKindRow(' + g.kind + ')">' +
+          '<span class="dot ' + (takenN ? "ok" : "warn") + '"></span>' +
+          '<span class="name">' + label + '</span>' +
+          '<span class="meta">' + t('kindPosts', { taken: takenN, free: g.items.length - takenN }) + '</span></div>' +
+          // 干活的人单独一行，**完整列出**（不截断）—— 玩家要求"保证信息完整"
+          (workers.length ? '<div class="kmworkers' + (on ? " sel" : "") + '" onclick="pickKindRow(' + g.kind + ')">' +
+            '→ ' + esc(workers.join("、")) + '</div>' : '') +
+          (on ? workerPicker(g.kind) : '');
+      } else {
+        g.items.forEach(function (x) {
+          var on2 = (selPost === x.i);
+          html += '<div class="row' + (on2 ? " sel" : "") + '" onclick="pickJobRow(' + x.i + ')">' +
+            '<span class="dot ' + (x.j.worker ? "ok" : "warn") + '"></span>' +
+            '<span class="name">' + esc(x.j.name) + '</span>' +
+            '<span class="meta">' + (x.j.worker ? "→ " + esc(x.j.worker) : t('vacant')) + '</span></div>';
+          if (on2) html += workerPicker(-1);
+        });
+      }
+    });
+    return html;
+  }
+
+  function renderJobs() {
+    var el = document.getElementById("page-jobs");
+    var jobs = state.allJobs || [];
+    var takenN = 0, freeN = 0;
+    jobs.forEach(function (j) { if (j.worker) takenN++; else freeN++; });
+
+    var rowsHtml = jobsRowsHtml(jobs);
+
+    el.innerHTML = '<div class="filters">' +
+      '<button class="btn" onclick="askFill()">' + t('fill') + '</button>' +
+      '<button class="btn danger" onclick="askUnassignAll()">' + t('unassignAllBtn') + '</button>' +
+      '<button class="btn" onclick="smAct(\'smRefresh\')">' + t('refresh') + '</button></div>' +
+      '<h2>' + t('allJobs', { n: jobs.length, taken: takenN, free: freeN }) + '</h2>' +
+      '<div class="panel">' + (jobs.length ? rowsHtml : '<div class="empty">' + t('noJobs') + '</div>') + '</div>';
+  }
+
+  // 给选中的工位挑人：本据点居民列表，**无业的排前面**（他们才是要派的）
+  // 挑人面板：kindCode >= 0 表示这是"类别合并行"（农民/守卫，一人可多岗）
+  function workerPicker(kindCode) {
+    // 只列"能接这个活的人"（玩家要求）：无业的 + 干同类活但**还没到上限**的。
+    // 上限由游戏侧算好（HasSpareCapacity，按原版 maxProductionPerNPC），随 W 行的 spare 字段过来。
+    var list = state.settlers.map(function (r, i) { return { r: r, i: i }; }).filter(function (x) {
+      if (x.r.st === 0) return true;
+      if (kindCode !== undefined && kindCode >= 0 && x.r.kind === kindCode && x.r.spare) return true;
+      return false;
+    });
+    list.sort(function (a, b) { return (a.r.st === 0 ? 0 : 1) - (b.r.st === 0 ? 0 : 1); });
+    var sel = (kindCode !== undefined && kindCode >= 0)
+      ? ("smPickKindRow" + kindCode) : ("smPickJobRow" + state.pickedJobRow);
+    return '<div class="pickbar"><div class="pickhint">' + t('pickWorkerHint') + '</div>' +
+      list.map(function (x) {
+        return '<button class="btn" onclick="assignWorkerTo(\'' + sel + '\',' + x.i + ')">' +
+          esc(x.r.name) + (x.r.st === 0 ? '' : '（' + kindInfo(x.r.kind).l + '）') + '</button>';
+      }).join("") +
+      '<button class="btn" onclick="closePickers()">' + t('cancel') + '</button></div>';
+  }
+  function closePickers() { state.pickedJobRow = -1; state.pickedKindRow = -1; render(); }
+  function pickJobRow(i) { state.pickedJobRow = i; state.pickedKindRow = -1; render(); }
+  function pickKindRow(k) { state.pickedKindRow = k; state.pickedJobRow = -1; render(); }
+  function assignWorkerTo(selEvent, i) {
+    // 界面上**当场**见效（乐观更新）：工位行立刻写上他，或他这类活的状态立刻变化
+    if (selEvent.indexOf("smPickKindRow") === 0) optimisticAssignKind(i, parseInt(selEvent.replace("smPickKindRow", ""), 10));
+    else optimisticAssign(i, parseInt(selEvent.replace("smPickJobRow", ""), 10));
+    smAct(selEvent);                    // 先告诉游戏"选中的是哪个工位 / 哪一类工位"
+    smAct("smPickWorker" + i);          // 再给这个人（游戏侧两个都齐了才派活）
+    closePickers();
+    refreshAfterAction();
+  }
+
+  // ======================= 居民页：给人派活 / 派运输线 =======================
+  function setPickMode(m) { state.pickMode = (state.pickMode === m) ? "" : m; render(); }
+
+  // 给人派活：列出**空缺**工位（行号按全量工位列表 —— 游戏侧就是按那份解析的）
+  function jobPickerForPicked() {
+    // 顶替（玩家要求：只在居民页提供）：**已有人的工位逐个列出**并标注占用者 ——
+    // 点它就是把人派到那个工位上（原版指派会自动把原占用者解下来）。
+    // 空工位则按类别合并（农民/守卫一人可多岗，这里没有"顶谁"的歧义，合并更清爽）。
+    var out = [], seenKind = {}, takenBtns = [];
+    // 顶替（玩家结论）：这游戏真正需要顶替的场合**只有商人摊位** ——
+    // 招到特殊商人居民时要把他派到贸易摊位上，而摊位是一岗一人，指定具体摊位最自然。
+    // 农民/守卫那种一人对多岗的没有必要顶替（有空位就填空位），所以不列出来。
+    (state.allJobs || []).forEach(function (j, i) {
+      if (j.worker) {
+        if (j.kind === 4) {
+          takenBtns.push('<button class="btn swap" onclick="assignPickedToJob(' + i + ')">' +
+            esc(j.name) + '（' + esc(j.worker) + '）</button>');
+        }
+        return;
+      }
+      if (kindIsMulti(j.kind)) {
+        if (seenKind[j.kind]) return;
+        seenKind[j.kind] = true;
+        out.push('<button class="btn" onclick="assignPickedToKind(' + j.kind + ')">' +
+          kindInfo(j.kind).l + ' ×' + (state.allJobs.filter(function (x) { return x.kind === j.kind && !x.worker; }).length) + '</button>');
+      } else {
+        out.push('<button class="btn" onclick="assignPickedToJob(' + i + ')">' + esc(j.name) + '</button>');
+      }
+    });
+    if (takenBtns.length) {
+      out.push('<div class="pickhint" style="width:100%">' + t('pickSwapHint') + '</div>');
+      out = out.concat(takenBtns);
+    }
+    return '<div class="pickbar"><div class="pickhint">' + t('pickJobHint') + '</div>' +
+      (out.length ? out.join("") : '<span class="empty">' + t('noFreeJobs') + '</span>') +
+      '<button class="btn" onclick="setPickMode(\'\')">' + t('cancel') + '</button></div>';
+  }
+  function assignPickedToKind(k) {
+    optimisticAssignKind(state.pickedSettler, k);
+    smAct("smPickKindRow" + k);
+    smAct("smPickWorker" + state.pickedSettler);
+    state.pickMode = "";
+    render();                 // 乐观更新后立刻重绘：界面上当场看到变化
+    refreshAfterAction();
+  }
+  function assignPickedToJob(i) {
+    optimisticAssign(state.pickedSettler, i);
+    smAct("smAssignSettlerToJob" + i);
+    state.pickMode = "";
+    render();                 // 乐观更新后立刻重绘：界面上当场看到变化
+    refreshAfterAction();
+  }
+
+  // 派运输线：列出自有据点当目的地（排除他所在的据点）
+  function caravanPicker() {
+    var out = [];
+    state.settlements.forEach(function (s, i) {
+      if (s.name === state.here) return;
+      out.push('<button class="btn" onclick="assignPickedToCaravan(' + i + ')">' + esc(s.name) + '</button>');
+    });
+    return '<div class="pickbar"><div class="pickhint">' + t('pickCaravanHint') + '</div>' +
+      (out.length ? out.join("") : '<span class="empty">' + t('noOtherSettle') + '</span>') +
+      '<button class="btn" onclick="setPickMode(\'\')">' + t('cancel') + '</button></div>';
+  }
+  function assignPickedToCaravan(i) {
+    var d = state.settlements[i];
+    optimisticCaravan(state.pickedSettler, d ? d.name : "");
+    smAct("smAssignCaravan" + i);
+    state.pickMode = "";
+    render();                 // 乐观更新后立刻重绘：界面上当场看到变化
+    refreshAfterAction();
+  }
+
+  // ======================= 设置 =======================
+  function renderSettings() {
+    var el = document.getElementById("page-settings");
+    var c = state.cfg;
+    el.innerHTML = '<div style="flex:1; min-height:0; overflow-y:auto">' +
+      '<div class="panel" style="flex:none; padding:calc(6px * var(--s)) calc(16px * var(--s))">' +
+      settingRow(t('uiScale'), ["0.8", "1", "1.2"].map(function (z) {
+        return btn("zoom", z, String(c.zoom) === z, z + "×"); }).join("")) +
+      settingRow(t('fontSize'), ["0.85", "1", "1.2", "1.4"].map(function (z) {
+        return btn("fs", z, String(c.fs) === z, z + "×"); }).join("")) +
+      settingRow(t('theme'), [["green", t('themeGreen')], ["amber", t('themeAmber')], ["blue", t('themeBlue')]].map(function (p) {
+        return btn("theme", p[0], c.theme === p[0], p[1]); }).join("")) +
+      settingRow(t('defSort'), btn("sortDefault", "status", c.sortDefault === "status", t('byStatus')) +
+        btn("sortDefault", "name", c.sortDefault === "name", t('byNameShort'))) +
+      settingRow(t('toasts'), btn("toasts", "1", c.toasts, "开") + btn("toasts", "0", !c.toasts, "关")) +
+      settingRow(t('selfCheck'), '<span>' + (state.pong ? t('bridgeOk') : t('waiting')) + '</span>') +
+      settingRow(t('language'), btn("lang", "zh", c.lang === "zh", "中文") +
+        btn("lang", "en", c.lang === "en", "English")) +
+      settingRow(t('hotkey'), '<span style="display:inline-block; min-width:calc(120px * var(--s)); color:var(--accent-hi)">' +
+        (c.hotkey > 0 ? scName(c.hotkey) : t('hotkeyOff')) + '</span>' +
+        (CAPTURE
+          ? '<span style="color:#d8a13a">' + t('keyPress') + '</span>'
+          : btn("hotkeyCapture", "1", false, t('keyChange')) +
+            btn("hotkey", "0", c.hotkey === 0, t('off')))) +
+      '</div>' +
+      '<div class="about">' + t("about") + '</div>' + '</div>';
+  }
+  function settingRow(label, val) {
+    return '<div class="setting"><span class="label">' + label + '</span><span class="val">' + val + '</span></div>';
+  }
+  function btn(key, value, on, text) {
+    return '<button class="btn' + (on ? " on" : "") + '" onclick="setCfg(\'' + key + '\',\'' + value + '\')">' + text + '</button>';
+  }
+  function setCfg(key, value) {
+    if (key === "zoom") state.cfg.zoom = parseFloat(value);
+    else if (key === "fs") state.cfg.fs = parseFloat(value);
+    else if (key === "toasts") state.cfg.toasts = (value === "1");
+    else if (key === "hotkeyCapture") {
+      // 进入"等待按键"状态；顺便让游戏那边暂时忽略热键 ——
+      // 否则捕获过程中按到旧热键，游戏会当成开/关面板，面板会当场消失
+      CAPTURE = true; smAct("smCaptureStart"); saveCfg(); render(); return;
+    }
+    else if (key === "hotkey") {
+      state.cfg.hotkey = parseInt(value, 10) || 0;
+      state.hotkeyInGame = state.cfg.hotkey;
+      smAct("smSetHotkey" + state.cfg.hotkey);          // 立即生效，不用重开游戏
+    }
+    else state.cfg[key] = value;
+    if (key === "sortDefault") state.sort = value;
+    saveCfg(); applyCfg(); if (key === "lang") { go(state.page); } else { render(); }
+  }
+
+  // ======================= 确认弹层 =======================
+  var confirmCb = null, confirmPick = null;
+  function confirmAsk(text, cb, options, pickCb) {
+    confirmCb = cb; confirmPick = pickCb || null;
+    var box = document.getElementById("confirm");
+    var txt = document.getElementById("confirmTxt");     // 别叫 t —— 会盖住翻译函数 t()
+    var yes = document.getElementById("confirmYes");
+    if (options) {
+      txt.innerHTML = esc(text) + '<div style="margin-top:calc(14px * var(--s)); display:flex; flex-direction:column; gap:calc(6px * var(--s))">' +
+        options.map(function (o) {
+          return '<button class="btn" onclick="confirmChoose(' + o.i + ')">' + esc(o.name) + '</button>';
+        }).join("") + '</div>';
+      yes.style.display = "none";
+    } else {
+      txt.textContent = text;
+      yes.style.display = cb ? "" : "none";
+    }
+    box.className = "on";
+  }
+  function confirmChoose(i) { confirmClose(); if (confirmPick) confirmPick(i); }
+  function confirmClose() { document.getElementById("confirm").className = ""; }
+  document.getElementById("confirmYes").onclick = function () {
+    var cb = confirmCb; confirmClose(); if (cb) cb();
+  };
+
+  // ======================= 启动 =======================
+  // 注意顺序：必须先 loadCfg()（它会把存档里的旧键码合并进来），再迁移 ——
+  // 反过来的话存档里的 68 会把迁移结果覆盖掉（踩过）。
+  loadCfg();
+  migrateHotkeySpace();
+  // 按键捕获：进入等待状态后，下一次按下的键就成为面板热键；Esc 取消。
+  // 用捕获阶段监听，避免被页面里其它 keydown 抢先；preventDefault 避免它同时触到游戏。
+  document.addEventListener("keydown", function (e) {
+    if (!CAPTURE) {
+      var tag = e.target && e.target.tagName ? String(e.target.tagName).toUpperCase() : "";
+      var inField = (tag === "INPUT" || tag === "TEXTAREA");
+
+      // Esc 退出面板：页面直接发关闭，不再依赖 PrismaUI 的失焦 + 定时器 ——
+      // 面板聚焦时游戏是暂停的，Papyrus 的定时器不推进，那条路关得不可靠（玩家反馈）。
+      if (e.key === "Escape" || e.key === "Esc" || e.code === "Escape" || (e.keyCode || e.which) === 27) {
+        if (inField && e.target && e.target.blur) { e.target.blur(); return; }   // 在输入框里先退出输入
+        e.preventDefault();
+        e.stopPropagation();
+        // 先请插件"立刻收面板"（原生层，延迟最低）；Papyrus 那条照旧发，用于同步状态
+        if (typeof window.smNativeClose === "function") { try { window.smNativeClose(); } catch (err) {} }
+        smAct("smCloseEsc");
+        return;
+      }
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    // Esc 取消：同样不能只认 e.code（这个内核不保证给），三种来源都判一遍
+    if (e.code === "Escape" || e.key === "Escape" || e.key === "Esc" || (e.keyCode || e.which) === 27) {
+      CAPTURE = false; smAct("smCaptureEnd"); render(); return;
+    }
+    var sc = keyToCode(e);
+    if (!sc) {
+      // 认不出来时把原始字段一起显示 —— 万一这个内核给的又是别的字段名，一眼就能看出来
+      toast(t("keyBad") + "  [code=" + e.code + " key=" + e.key + " vk=" + (e.keyCode || e.which) + "]");
+      return;
+    }
+    CAPTURE = false;
+    state.cfg.hotkey = sc;
+    state.hotkeyInGame = sc;
+    saveCfg();
+    smAct("smCaptureEnd");
+    smAct("smSetHotkey" + sc);                 // 立刻生效，不用重开游戏
+    toast(t("hotkey") + ": " + scName(sc));
+    render();
+  }, true);
+
+  window.addEventListener("load", function () {
+    var ok = !!(window.prisma && window.prisma.emit);
+    setBridge(ok ? t("injected") : t("noPrisma"));
+    smAct("smPing");
+    // 数据没到就重试：面板打开、页面加载、推送这三件事有时序竞争，
+    // 一次 ping 丢了就会"面板开着却没数据"（踩过）。最多重试 10 次（约 20 秒）。
+    var pingTries = 0;
+    var pingTimer = window.setInterval(function () {
+      pingTries += 1;
+      if (state.settlements.length || pingTries > 10) { window.clearInterval(pingTimer); return; }
+      smAct("smPing");
+    }, 2000);
+    window.setTimeout(function () {
+      if (!state.pong) setBridge(ok ? t("noEvent") : t("noBridge"));
+    }, 2500);
+    go("overview");
+  });
+</script>
+</body>
+</html>

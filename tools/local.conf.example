@@ -1,0 +1,11 @@
+# 本机路径配置 —— 复制成 tools/local.conf 再按自己的情况改。
+#
+#   cp tools/local.conf.example tools/local.conf
+#
+# local.conf **不进版本库**（只跟本机有关）。构建/打包脚本会读它：
+#   FO4_DIR  = 游戏根目录（Papyrus Compiler 在 <FO4_DIR>/Papyrus Compiler/ 下）
+#   MO2_MODS = MO2 的 mods 目录；产物会部署到 <MO2_MODS>/SimpleSettlementManager
+#
+# 路径写法：Windows 盘符用 /e/... 这种 git-bash 形式（脚本在 git-bash 里跑）。
+FO4_DIR="/e/SteamLibrary/steamapps/common/Fallout 4"
+MO2_MODS="/e/Games/MO2/mods"
